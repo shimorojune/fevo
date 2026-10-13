@@ -45,6 +45,7 @@ export function configure(rules: Rules): void {
   core.setTiming(rules.timing.agentHz, rules.timing.physicsSubsteps);
   core.setLimits(rules.timing.maxSteps, rules.timing.stopSpeedMps, rules.timing.stopSteps);
   core.setSensors(rules.sensors.rayCount, rules.sensors.rayLengthM, rules.sensors.rayFovRad, rules.sensors.speedNormMps);
+  core.setSpeedLimit(0); // practice knob off: official laps have no limit
 }
 
 export function loadTrack(track: TrackFile): void {

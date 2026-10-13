@@ -36,6 +36,12 @@ let rayLength: f64 = 200.0;
 let rayFov: f64 = Math.PI;
 let speedNorm: f64 = 100.0;
 
+/**
+ * Practice only: above this forward speed throttle is cut. Official laps run
+ * with no limit; configure() in @fevo/sim and the Python SDK reset it.
+ */
+let speedLimit: f64 = Infinity;
+
 let steps: i32 = 0;
 let status: i32 = STATUS_RUNNING;
 let slowSteps: i32 = 0;
@@ -76,6 +82,73 @@ export function setSensors(count: i32, lengthM: f64, fovRad: f64, speedNormMps: 
 export { loadTrack } from "./track";
 export { loadAgent } from "./agent";
 
+/** Practice only. Pass Infinity (or any value ≤ 0) for no limit. */
+export function setSpeedLimit(mps: f64): void {
+  speedLimit = mps > 0 ? mps : Infinity;
+}
+
+// ---- raw-memory API, for hosts without the JS bindings (the Python SDK) ----
+//
+// The host writes plain numbers into these two buffers, then calls one of the
+// *FromScratch functions with the counts. Layouts are documented on each.
+
+const scratchF = new StaticArray<f64>(1 << 18);
+const scratchI = new StaticArray<i32>(1 << 16);
+
+export function scratchF64(): usize {
+  return changetype<usize>(scratchF);
+}
+export function scratchI32(): usize {
+  return changetype<usize>(scratchI);
+}
+export function scratchF64Capacity(): i32 {
+  return scratchF.length;
+}
+export function scratchI32Capacity(): i32 {
+  return scratchI.length;
+}
+
+/** F64: the car params in CAR_PARAM_ORDER. */
+export function setCarParamsFromScratch(count: i32): void {
+  assert(count == PARAM_COUNT, "wrong car param count");
+  for (let i = 0; i < PARAM_COUNT; i++) unchecked((params[i] = scratchF[i]));
+}
+
+/** F64: centreline (2n), widthLeft (n), widthRight (n). I32: gates (gateCount). */
+export function loadTrackFromScratch(n: i32, gateCount: i32): void {
+  const centre = new Float64Array(2 * n);
+  const wl = new Float64Array(n);
+  const wr = new Float64Array(n);
+  const gates = new Int32Array(gateCount);
+  for (let i = 0; i < 2 * n; i++) centre[i] = scratchF[i];
+  for (let i = 0; i < n; i++) {
+    wl[i] = scratchF[2 * n + i];
+    wr[i] = scratchF[3 * n + i];
+  }
+  for (let i = 0; i < gateCount; i++) gates[i] = scratchI[i];
+  track.loadTrack(centre, wl, wr, gates);
+}
+
+/**
+ * I32: io (ioLen), nodeInts (5 × nodeCount), linkSlots (linkCount).
+ * F64: nodeFloats (2 × nodeCount), linkWeights (linkCount).
+ */
+export function loadAgentFromScratch(slotCount: i32, ioLen: i32, nodeCount: i32, linkCount: i32): void {
+  const io = new Int32Array(ioLen);
+  const ints = new Int32Array(5 * nodeCount);
+  const lSlots = new Int32Array(linkCount);
+  const floats = new Float64Array(2 * nodeCount);
+  const weights = new Float64Array(linkCount);
+  let k = 0;
+  for (let i = 0; i < ioLen; i++) io[i] = scratchI[k++];
+  for (let i = 0; i < 5 * nodeCount; i++) ints[i] = scratchI[k++];
+  for (let i = 0; i < linkCount; i++) lSlots[i] = scratchI[k++];
+  k = 0;
+  for (let i = 0; i < 2 * nodeCount; i++) floats[i] = scratchF[k++];
+  for (let i = 0; i < linkCount; i++) weights[i] = scratchF[k++];
+  agent.loadAgent(slotCount, io, ints, floats, lSlots, weights);
+}
+
 // ---- running a lap ----
 
 /** Free placement without a track, for vehicle tests. */
@@ -99,6 +172,22 @@ export function resetAtStart(lateralRightM: f64, headingRightRad: f64, speed: f6
 }
 
 /**
+ * Practice only: place the car at any centreline point. Gates behind the
+ * point count as already passed, so the lap finishes at the start line.
+ */
+export function resetAtPoint(index: i32, lateralRightM: f64, headingRightRad: f64, speed: f64): void {
+  assert(track.loaded, "no track loaded");
+  const i = ((index % track.n) + track.n) % track.n;
+  const x = track.centreX(i) - track.normalX(i) * lateralRightM;
+  const y = track.centreY(i) - track.normalY(i) * lateralRightM;
+  reset(x, y, track.headingAt(i) - headingRightRad, speed);
+  progressIdx = i;
+  nextGate = 1;
+  while (nextGate < track.gateCount && track.gateIndex(nextGate) <= i) nextGate++;
+  observe();
+}
+
+/**
  * One agent step: steer and throttle in [-1, 1] (clamped, not rejected).
  * Returns the lap status; once it isn't RUNNING, further steps do nothing.
  */
@@ -111,7 +200,7 @@ export function step(steer: f64, throttle: f64): i32 {
   const s = steer < -1 ? -1.0 : steer > 1 ? 1.0 : steer;
   const t = throttle < -1 ? -1.0 : throttle > 1 ? 1.0 : throttle;
   for (let k = 0; k < substeps; k++) {
-    car.substep(-s, t, dt);
+    car.substep(-s, t > 0 && car.vx >= speedLimit ? 0.0 : t, dt);
     if (track.loaded) {
       updateProgress();
       if (status != STATUS_RUNNING) break;
@@ -153,6 +242,12 @@ export function getAgentThrottle(): f64 {
 }
 
 const probe = new StaticArray<f64>(MAX_RAYS + 4);
+
+/** Raw-memory variant of evaluateAgent: inputs are the first `count` numbers of the F64 scratch buffer. */
+export function evaluateAgentFromScratch(count: i32): void {
+  for (let i = 0; i < count; i++) unchecked((probe[i] = scratchF[i]));
+  agent.evaluate(probe);
+}
 
 /** Evaluate the loaded agent on arbitrary inputs, for parity tests. */
 export function evaluateAgent(inputs: Float64Array): void {

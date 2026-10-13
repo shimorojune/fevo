@@ -1,0 +1,143 @@
+{
+ "id": "solo-1",
+ "simVersion": "1.0.0",
+ "car": {
+  "massKg": 800,
+  "lengthM": 5.3,
+  "widthM": 1.9,
+  "wheelbaseM": 3.4,
+  "cgToFrontM": 1.87,
+  "yawInertiaKgM2": 1100,
+  "maxSteerRad": 0.3,
+  "steerRateRadPerS": 2.5,
+  "powerW": 750000,
+  "maxBrakeForceN": 40000,
+  "brakeBiasFront": 0.58,
+  "tyreMuFront": 1.65,
+  "tyreMuRear": 1.8,
+  "pacejkaBFront": 13,
+  "pacejkaBRear": 15,
+  "pacejkaC": 1.5,
+  "pacejkaE": -0.5,
+  "dragAreaM2": 1.4,
+  "downforceAreaM2": 4.8,
+  "aeroBalanceFront": 0.45,
+  "airDensityKgM3": 1.2,
+  "rollingResistance": 0.015,
+  "gravityMps2": 9.80665,
+  "kinematicBelowMps": 3,
+  "dynamicAboveMps": 6
+ },
+ "timing": {
+  "agentHz": 60,
+  "physicsSubsteps": 4,
+  "maxSteps": 12000,
+  "stopSpeedMps": 1,
+  "stopSteps": 120
+ },
+ "start": {
+  "kind": "standing",
+  "initialSpeedMps": 0
+ },
+ "seeds": [
+  {
+   "lateralM": -0.5,
+   "headingRad": -0.005
+  },
+  {
+   "lateralM": 0,
+   "headingRad": 0
+  },
+  {
+   "lateralM": 0.5,
+   "headingRad": 0.005
+  }
+ ],
+ "track": {
+  "gateSpacingM": 40
+ },
+ "sensors": {
+  "rayCount": 11,
+  "rayLengthM": 200,
+  "rayFovRad": 3.141592653589793,
+  "speedNormMps": 100
+ },
+ "observation": [
+  "ray_0",
+  "ray_1",
+  "ray_2",
+  "ray_3",
+  "ray_4",
+  "ray_5",
+  "ray_6",
+  "ray_7",
+  "ray_8",
+  "ray_9",
+  "ray_10",
+  "speed",
+  "lap_progress",
+  "lateral_offset",
+  "heading_error"
+ ],
+ "action": [
+  "steer",
+  "throttle"
+ ],
+ "agent": {
+  "maxFileBytes": 512000
+ },
+ "carParamOrder": [
+  "massKg",
+  "lengthM",
+  "widthM",
+  "wheelbaseM",
+  "cgToFrontM",
+  "yawInertiaKgM2",
+  "maxSteerRad",
+  "steerRateRadPerS",
+  "powerW",
+  "maxBrakeForceN",
+  "brakeBiasFront",
+  "tyreMuFront",
+  "tyreMuRear",
+  "pacejkaBFront",
+  "pacejkaBRear",
+  "pacejkaC",
+  "pacejkaE",
+  "dragAreaM2",
+  "downforceAreaM2",
+  "aeroBalanceFront",
+  "airDensityKgM3",
+  "rollingResistance",
+  "gravityMps2",
+  "kinematicBelowMps",
+  "dynamicAboveMps"
+ ],
+ "carParamsPacked": [
+  800,
+  5.3,
+  1.9,
+  3.4,
+  1.87,
+  1100,
+  0.3,
+  2.5,
+  750000,
+  40000,
+  0.58,
+  1.65,
+  1.8,
+  13,
+  15,
+  1.5,
+  -0.5,
+  1.4,
+  4.8,
+  0.45,
+  1.2,
+  0.015,
+  9.80665,
+  3,
+  6
+ ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@fevo/python",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Copies the wasm, tracks and rules into the Python package so it runs the exact same simulator.",
+  "scripts": {
+    "build": "node scripts/sync-assets.ts",
+    "test": "node scripts/make-fixture.ts && uv run --project . pytest -q"
+  },
+  "dependencies": {
+    "@fevo/agent-format": "workspace:*",
+    "@fevo/branding": "workspace:*",
+    "@fevo/rules": "workspace:*",
+    "@fevo/sim": "workspace:*",
+    "@fevo/sim-core": "workspace:*",
+    "@fevo/tracks": "workspace:*"
+  }
+}

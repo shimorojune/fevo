@@ -1,0 +1,270 @@
+{
+ "teams": [
+  {
+   "id": "red-bull",
+   "real": {
+    "name": "Red Bull Racing",
+    "shortName": "RBR",
+    "colors": {
+     "primary": "#1E2A5A",
+     "secondary": "#DB0A40",
+     "accent": "#FFC906"
+    }
+   },
+   "generic": {
+    "name": "Team Navy",
+    "shortName": "NAV",
+    "colors": {
+     "primary": "#1E2A5A",
+     "secondary": "#DB0A40",
+     "accent": "#FFC906"
+    }
+   }
+  },
+  {
+   "id": "ferrari",
+   "real": {
+    "name": "Scuderia Ferrari",
+    "shortName": "FER",
+    "colors": {
+     "primary": "#DC0000",
+     "secondary": "#111111",
+     "accent": "#FFEB00"
+    }
+   },
+   "generic": {
+    "name": "Team Scarlet",
+    "shortName": "SCA",
+    "colors": {
+     "primary": "#DC0000",
+     "secondary": "#111111",
+     "accent": "#FFEB00"
+    }
+   }
+  },
+  {
+   "id": "mercedes",
+   "real": {
+    "name": "Mercedes-AMG",
+    "shortName": "MER",
+    "colors": {
+     "primary": "#1B1B1B",
+     "secondary": "#C6C6C6",
+     "accent": "#00D7B6"
+    }
+   },
+   "generic": {
+    "name": "Team Silver",
+    "shortName": "SIL",
+    "colors": {
+     "primary": "#1B1B1B",
+     "secondary": "#C6C6C6",
+     "accent": "#00D7B6"
+    }
+   }
+  },
+  {
+   "id": "mclaren",
+   "real": {
+    "name": "McLaren",
+    "shortName": "MCL",
+    "colors": {
+     "primary": "#FF8000",
+     "secondary": "#111111",
+     "accent": "#47C7FC"
+    }
+   },
+   "generic": {
+    "name": "Team Papaya",
+    "shortName": "PAP",
+    "colors": {
+     "primary": "#FF8000",
+     "secondary": "#111111",
+     "accent": "#47C7FC"
+    }
+   }
+  },
+  {
+   "id": "aston-martin",
+   "real": {
+    "name": "Aston Martin",
+    "shortName": "AMR",
+    "colors": {
+     "primary": "#00594F",
+     "secondary": "#0B1F1C",
+     "accent": "#CEDC00"
+    }
+   },
+   "generic": {
+    "name": "Team Racing Green",
+    "shortName": "GRN",
+    "colors": {
+     "primary": "#00594F",
+     "secondary": "#0B1F1C",
+     "accent": "#CEDC00"
+    }
+   }
+  },
+  {
+   "id": "alpine",
+   "real": {
+    "name": "Alpine",
+    "shortName": "ALP",
+    "colors": {
+     "primary": "#0090FF",
+     "secondary": "#111111",
+     "accent": "#FF87BC"
+    }
+   },
+   "generic": {
+    "name": "Team Azure",
+    "shortName": "AZU",
+    "colors": {
+     "primary": "#0090FF",
+     "secondary": "#111111",
+     "accent": "#FF87BC"
+    }
+   }
+  },
+  {
+   "id": "williams",
+   "real": {
+    "name": "Williams",
+    "shortName": "WIL",
+    "colors": {
+     "primary": "#041E42",
+     "secondary": "#FFFFFF",
+     "accent": "#00A3E0"
+    }
+   },
+   "generic": {
+    "name": "Team Ocean",
+    "shortName": "OCE",
+    "colors": {
+     "primary": "#041E42",
+     "secondary": "#FFFFFF",
+     "accent": "#00A3E0"
+    }
+   }
+  },
+  {
+   "id": "racing-bulls",
+   "real": {
+    "name": "Racing Bulls",
+    "shortName": "RB",
+    "colors": {
+     "primary": "#F2F4F7",
+     "secondary": "#1434CB",
+     "accent": "#E30613"
+    }
+   },
+   "generic": {
+    "name": "Team Ivory",
+    "shortName": "IVO",
+    "colors": {
+     "primary": "#F2F4F7",
+     "secondary": "#1434CB",
+     "accent": "#E30613"
+    }
+   }
+  },
+  {
+   "id": "haas",
+   "real": {
+    "name": "Haas",
+    "shortName": "HAA",
+    "colors": {
+     "primary": "#FFFFFF",
+     "secondary": "#111111",
+     "accent": "#E6002B"
+    }
+   },
+   "generic": {
+    "name": "Team Graphite",
+    "shortName": "GRA",
+    "colors": {
+     "primary": "#FFFFFF",
+     "secondary": "#111111",
+     "accent": "#E6002B"
+    }
+   }
+  },
+  {
+   "id": "audi",
+   "real": {
+    "name": "Audi",
+    "shortName": "AUD",
+    "colors": {
+     "primary": "#B4B8BB",
+     "secondary": "#111111",
+     "accent": "#F50537"
+    }
+   },
+   "generic": {
+    "name": "Team Titanium",
+    "shortName": "TIT",
+    "colors": {
+     "primary": "#B4B8BB",
+     "secondary": "#111111",
+     "accent": "#F50537"
+    }
+   }
+  },
+  {
+   "id": "cadillac",
+   "real": {
+    "name": "Cadillac",
+    "shortName": "CAD",
+    "colors": {
+     "primary": "#111111",
+     "secondary": "#FFFFFF",
+     "accent": "#C9A35A"
+    }
+   },
+   "generic": {
+    "name": "Team Onyx",
+    "shortName": "ONX",
+    "colors": {
+     "primary": "#111111",
+     "secondary": "#FFFFFF",
+     "accent": "#C9A35A"
+    }
+   }
+  }
+ ],
+ "circuits": [
+  {
+   "id": "spielberg",
+   "real": {
+    "name": "Red Bull Ring",
+    "location": "Spielberg, Austria"
+   },
+   "generic": {
+    "name": "Spielberg",
+    "location": "Styria, Austria"
+   }
+  },
+  {
+   "id": "monza",
+   "real": {
+    "name": "Autodromo Nazionale Monza",
+    "location": "Monza, Italy"
+   },
+   "generic": {
+    "name": "Monza",
+    "location": "Lombardy, Italy"
+   }
+  },
+  {
+   "id": "austin",
+   "real": {
+    "name": "Circuit of the Americas",
+    "location": "Austin, USA"
+   },
+   "generic": {
+    "name": "Austin",
+    "location": "Texas, USA"
+   }
+  }
+ ]
+}

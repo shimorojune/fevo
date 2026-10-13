@@ -15,12 +15,13 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 | `packages/sim-core` | AssemblyScript simulator compiled to one `sim.wasm` for browser, Node verifier and Python. Physics, sensors, laps and network evaluation. |
 | `packages/agent-format` | Validates uploaded agents (NEAT genome or MLP JSON) with user-facing errors and compiles them. See [docs/agent-format.md](docs/agent-format.md). |
 | `packages/sim` | The simulator API the apps use: configure rules, load track and agent, run official laps. |
+| `python/fevo` | Python SDK: the same `sim.wasm` via wasmtime, gym-style env, official evaluation, neat-python export, replay. See [python/fevo/README.md](python/fevo/README.md). |
 | `tools/track-builder` | TUMFTM CSV → resampled, validated, hashed track JSON, plus an HTML preview. |
 | `tools/examples` | Tunes the example agents in `examples/`. |
 | `tools/replay` | Runs agents on every circuit and writes a self-contained replay page. |
 | `tools/parity` | Builds the neat-python parity fixture (needs Python with neat-python 2.0). |
 
-Planned next: `apps/api` and the verifier (server re-runs), leaderboard, `tools/golden`, `python/fevo-gym`.
+Planned next: `apps/api` and the verifier (server re-runs), leaderboard, `tools/golden`, publishing the Python package.
 
 ## Commands
 

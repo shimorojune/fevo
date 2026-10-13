@@ -131,6 +131,27 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  python/fevo:
+    dependencies:
+      '@fevo/agent-format':
+        specifier: workspace:*
+        version: link:../../packages/agent-format
+      '@fevo/branding':
+        specifier: workspace:*
+        version: link:../../packages/branding
+      '@fevo/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      '@fevo/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
+      '@fevo/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      '@fevo/tracks':
+        specifier: workspace:*
+        version: link:../../packages/tracks
+
   tools/examples:
     dependencies:
       '@fevo/agent-format':
