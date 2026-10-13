@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CIRCUITS, TEAMS } from "@fevo/branding";
 import { CAR_PARAM_ORDER, SOLO_1, packCarParams } from "@fevo/rules";
+import { qssLap, racingLine } from "../../../tools/calibrate/src/line.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, "..", "src", "fevo", "_data");
@@ -24,9 +25,19 @@ copyFileSync(wasmPath, join(out, "sim.wasm"));
 const wasmSha = createHash("sha256").update(readFileSync(wasmPath)).digest("hex");
 
 const tracks: Record<string, string> = {};
+mkdirSync(join(out, "reference"), { recursive: true });
 for (const f of readdirSync(tracksDir).filter((f) => f.endsWith(".track.json"))) {
   copyFileSync(join(tracksDir, f), join(out, "tracks", f));
-  tracks[f.replace(".track.json", "")] = JSON.parse(readFileSync(join(tracksDir, f), "utf8")).sha256;
+  const track = JSON.parse(readFileSync(join(tracksDir, f), "utf8"));
+  tracks[f.replace(".track.json", "")] = track.sha256;
+  // Racing line and reference speeds for the current car (tools/calibrate), for training rewards and analysis.
+  const line = racingLine(track, SOLO_1.car.widthM / 2 + 0.5);
+  const q = qssLap(line, SOLO_1.car);
+  const r3 = (xs: Float64Array) => Array.from(xs, (v) => Math.round(v * 1000) / 1000);
+  writeFileSync(
+    join(out, "reference", f.replace(".track", "")),
+    JSON.stringify({ rules: SOLO_1.id, lapS: q.lapS, offset: r3(line.offset), speed: r3(q.speed) }) + "\n",
+  );
 }
 
 const rules = { ...SOLO_1, carParamOrder: CAR_PARAM_ORDER, carParamsPacked: Array.from(packCarParams(SOLO_1.car)) };

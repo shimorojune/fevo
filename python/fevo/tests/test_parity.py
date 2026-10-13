@@ -102,3 +102,20 @@ def test_fingerprint_matches_website():
     # The website showed fingerprint 6f77df for examples/example-genome.json.
     program = from_json((ROOT / "examples" / "example-genome.json").read_text())
     assert program.fingerprint().startswith("6f77df")
+
+
+def test_step_fast_matches_step():
+    a, b = Simulator(), Simulator()
+    for s in (a, b):
+        s.load_track("spielberg")
+        s.reset(1)
+    for i in range(600):
+        steer, thr = 0.05 * ((i % 40) - 20) / 20, 1.0 if i % 100 < 70 else -0.5
+        code, vals = a.step_fast(steer, thr)
+        st = b.step(steer, thr)
+        assert fevo.sim.STATUS[code] == st
+        assert list(vals[:15]) == b.observation()
+        assert int(vals[18]) == b.progress_index and int(vals[20]) == b.steps
+        if st != "running":
+            break
+    assert a.state_hash() == b.state_hash()

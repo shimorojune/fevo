@@ -7,7 +7,7 @@ bit-identical to a lap there.
 
 __version__ = "0.1.0"
 
-from .data import Rules, Track, load_rules, load_track, track_ids  # noqa: E402
+from .data import Rules, Track, load_rules, load_track, reference, track_ids  # noqa: E402
 from .env import Env, make  # noqa: E402
 from .program import AgentError, Program, from_json, from_neat, neat_to_json  # noqa: E402
 from .replay import write_replay  # noqa: E402
@@ -15,6 +15,6 @@ from .sim import LapResult, OfficialResult, Practice, Simulator, evaluate, forma
 
 __all__ = [
     "AgentError", "Env", "LapResult", "OfficialResult", "Practice", "Program", "Rules", "Simulator", "Track",
-    "evaluate", "format_lap_time", "from_json", "from_neat", "load_rules", "load_track", "make", "neat_to_json",
+    "evaluate", "format_lap_time", "from_json", "from_neat", "load_rules", "load_track", "make", "reference", "neat_to_json",
     "summarize_official", "track_ids", "write_replay",
 ]  # fmt: skip

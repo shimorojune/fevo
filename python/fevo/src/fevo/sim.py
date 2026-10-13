@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -128,6 +129,16 @@ class Simulator:
 
     def step(self, steer: float, throttle: float) -> Status:
         return STATUS[self.core.call("step", float(steer), float(throttle))]
+
+    def step_fast(self, steer: float, throttle: float) -> tuple[int, tuple[float, ...]]:
+        """One step for training loops: (status code, observation + vx, vy, yaw rate, progress index, gates, steps).
+
+        Status codes index fevo.sim.STATUS. One wasm call and one memory read per step.
+        """
+        code = self.core.call("stepToScratch", float(steer), float(throttle))
+        n = len(self.rules.observation) + 6
+        raw = self.core.memory.read(self.core.store, self.core.f64_ptr, self.core.f64_ptr + 8 * n)
+        return code, struct.unpack(f"<{n}d", bytes(raw))
 
     def agent_step(self) -> Status:
         return STATUS[self.core.call("agentStep")]

@@ -98,3 +98,11 @@ def circuit_name(track_id: str, mode: str = "real") -> str:
         if c["id"] == track_id:
             return c[mode]["name"]
     return track_id
+
+
+@lru_cache(maxsize=None)
+def reference(track_id: str) -> dict[str, Any]:
+    """Racing line (offset from the centre line, metres, left positive) and the
+    reference speed at every centre-line point for the current car, plus the
+    reference lap time. Computed by tools/calibrate; a guide, not a bound."""
+    return _read(f"reference/{track_id}.json")

@@ -243,6 +243,25 @@ export function getAgentThrottle(): f64 {
 
 const probe = new StaticArray<f64>(MAX_RAYS + 4);
 
+/**
+ * Fast path for step-by-step training hosts: one call per step. Steps, then
+ * writes into the F64 scratch buffer: the observation (rayCount + 4 values),
+ * then forward speed, lateral speed, yaw rate, progress index, gates passed
+ * and steps. Returns the status.
+ */
+export function stepToScratch(steer: f64, throttle: f64): i32 {
+  const st = step(steer, throttle);
+  const k = rayCount + 4;
+  for (let i = 0; i < k; i++) unchecked((scratchF[i] = obs[i]));
+  unchecked((scratchF[k] = car.vx));
+  unchecked((scratchF[k + 1] = car.vy));
+  unchecked((scratchF[k + 2] = car.r));
+  unchecked((scratchF[k + 3] = <f64>progressIdx));
+  unchecked((scratchF[k + 4] = <f64>(nextGate - 1)));
+  unchecked((scratchF[k + 5] = <f64>steps));
+  return st;
+}
+
 /** Raw-memory variant of evaluateAgent: inputs are the first `count` numbers of the F64 scratch buffer. */
 export function evaluateAgentFromScratch(count: i32): void {
   for (let i = 0; i < count; i++) unchecked((probe[i] = scratchF[i]));
