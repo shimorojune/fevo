@@ -1,0 +1,17 @@
+{
+  "name": "@fevo/replay-viewer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "replay": "node src/build-replay.ts",
+    "serve": "node src/serve.ts"
+  },
+  "dependencies": {
+    "@fevo/agent-format": "workspace:*",
+    "@fevo/branding": "workspace:*",
+    "@fevo/rules": "workspace:*",
+    "@fevo/sim": "workspace:*",
+    "@fevo/tracks": "workspace:*"
+  }
+}

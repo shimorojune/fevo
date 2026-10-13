@@ -16,6 +16,7 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 | `packages/sim` | The simulator API the apps use: configure rules, load track and agent, run official laps. |
 | `tools/track-builder` | TUMFTM CSV → resampled, validated, hashed track JSON, plus an HTML preview. |
 | `tools/examples` | Tunes the example agents in `examples/`. |
+| `tools/replay` | Runs agents on every circuit and writes a self-contained replay page. |
 | `tools/parity` | Builds the neat-python parity fixture (needs Python with neat-python 2.0). |
 
 Planned next: `packages/render`, `apps/web`, `apps/api`, `apps/verifier`, `tools/golden`, `python/fevo-gym`.
@@ -30,6 +31,10 @@ pnpm test
 pnpm --filter @fevo/track-builder fetch-tumftm   # download TUMFTM CSVs (LGPL-3.0)
 pnpm --filter @fevo/track-builder bake spielberg         # bake one circuit
 pnpm --filter @fevo/track-builder preview                # render baked tracks to tools/track-builder/out/preview.html
+
+pnpm --filter @fevo/replay-viewer replay                 # race the example agents, write tools/replay/out/replay.html
+pnpm --filter @fevo/replay-viewer replay -- my-agent.json # race your own agent file(s) instead
+pnpm --filter @fevo/replay-viewer serve                  # optional: serve it on http://localhost:4173
 ```
 
 Requires Node 24 (tests run TypeScript directly via Node's type stripping).
