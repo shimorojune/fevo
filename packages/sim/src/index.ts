@@ -4,7 +4,7 @@
  * evaluation run inside @fevo/sim-core's wasm.
  */
 import { packProgram, type Program } from "@fevo/agent-format";
-import { packCarParams, type Rules } from "@fevo/rules";
+import { applySetup, packCarParams, type Rules } from "@fevo/rules";
 import * as core from "@fevo/sim-core";
 import type { TrackFile } from "@fevo/tracks";
 
@@ -39,9 +39,15 @@ export interface OfficialResult {
   ranked: boolean;
 }
 
-/** Configure the wasm for a rules version. Call once per rules version. */
-export function configure(rules: Rules): void {
-  core.setCarParams(packCarParams(rules.car));
+/** The car for a setup given as values in the rules' knob order (a Program's `setup`). */
+export function carFor(rules: Rules, setup?: readonly number[]) {
+  const s = setup ? Object.fromEntries(rules.setup.map((k, i) => [k.id, setup[i]!])) : undefined;
+  return applySetup(rules.car, rules.setup, s);
+}
+
+/** Configure the wasm for a rules version and car setup (default setup if omitted). */
+export function configure(rules: Rules, setup?: readonly number[]): void {
+  core.setCarParams(packCarParams(carFor(rules, setup)));
   core.setTiming(rules.timing.agentHz, rules.timing.physicsSubsteps);
   core.setLimits(rules.timing.maxSteps, rules.timing.stopSpeedMps, rules.timing.stopSteps);
   core.setSensors(rules.sensors.rayCount, rules.sensors.rayLengthM, rules.sensors.rayFovRad, rules.sensors.speedNormMps);
@@ -121,7 +127,7 @@ export function runLap(rules: Rules, seed: number, opts: { trace?: boolean } = {
 
 /** The three official laps and the ranking rule from the rules page. */
 export function runOfficialLaps(rules: Rules, track: TrackFile, program: Program): OfficialResult {
-  configure(rules);
+  configure(rules, program.setup);
   loadTrack(track);
   loadAgent(program);
   const laps = rules.seeds.map((_, i) => ({ ...runLap(rules, i), gateCount: track.gates.length }));

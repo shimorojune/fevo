@@ -59,3 +59,20 @@ test("lap time formatting", () => {
   assert.equal(formatLapTime(4212, 60), "1:10.20");
   assert.equal(formatLapTime(59, 60), "0:00.98");
 });
+
+
+test("setup changes the car: low wing is faster on the straights, slower round the corners", () => {
+  const t = track("monza");
+  const shape = { inputs: 15, outputs: 2, setup: R.setup };
+  const base = JSON.parse(readFileSync(new URL("examples/example-mlp.json", root), "utf8"));
+  const parse = (setup?: object) => {
+    const r = parseAgent(JSON.stringify(setup ? { ...base, setup } : base), shape);
+    if (!r.ok) assert.fail(r.errors[0]!.message);
+    return r.program;
+  };
+  const plain = runOfficialLaps(R, t, parse());
+  const asDefault = runOfficialLaps(R, t, parse({ wing: 0.3 }));
+  assert.deepEqual(plain.laps.map((l) => l.hash), asDefault.laps.map((l) => l.hash), "explicit default setup = no setup");
+  const low = runOfficialLaps(R, t, parse({ wing: 0 }));
+  assert.notDeepEqual(low.laps.map((l) => l.hash), plain.laps.map((l) => l.hash));
+});

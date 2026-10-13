@@ -4,6 +4,7 @@ import { CIRCUITS, circuitBrand } from "@fevo/branding";
 import { MAX_FILE_BYTES } from "@fevo/agent-format";
 import { SOLO_1 as R } from "@fevo/rules";
 import { LapsTable } from "../components/Laps";
+import { SetupSummary } from "../components/SetupSummary";
 import { useAgents, type Agent } from "../lib/agents";
 import { lapTime } from "../lib/format";
 import { useRun } from "../sim/useRun";
@@ -116,6 +117,12 @@ export function Upload() {
               <dd>{run.summary.nodes}</dd>
               <dd>{run.summary.parameters}</dd>
             </dl>
+          )}
+          {run.summary && (
+            <>
+              <h3>Car setup</h3>
+              <SetupSummary setup={run.summary.setup} />
+            </>
           )}
         </section>
       )}

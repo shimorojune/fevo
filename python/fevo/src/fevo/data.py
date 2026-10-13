@@ -46,7 +46,27 @@ class Rules:
 
     @property
     def car(self) -> dict[str, float]:
+        """The car at the default setup."""
         return self.raw["car"]
+
+    @property
+    def setup(self) -> list[dict[str, Any]]:
+        """Setup knobs: id, label, min, max, default, help, effects."""
+        return self.raw.get("setup", [])
+
+    def car_for(self, setup: list[float] | None) -> dict[str, float]:
+        """The car for a setup (values in knob order), exactly as the website computes it."""
+        car = dict(self.raw["car"])
+        if setup is None:
+            return car
+        for k, v in zip(self.setup, setup):
+            for e in k["effects"]:
+                car[e["param"]] = car[e["param"]] + e["perUnit"] * (v - k["default"])
+        return car
+
+    def packed_car(self, setup: list[float] | None) -> list[float]:
+        car = self.car_for(setup)
+        return [car[k] for k in self.raw["carParamOrder"]]
 
 
 @lru_cache(maxsize=None)

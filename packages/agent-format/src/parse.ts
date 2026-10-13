@@ -1,3 +1,4 @@
+import { completeSetup, validateSetup, type SetupKnob } from "@fevo/rules";
 import { AGGREGATIONS, GENOME_ACTIVATIONS, MLP_ACTIVATIONS } from "./functions.ts";
 import type { Program, ProgramNode } from "./program.ts";
 
@@ -31,6 +32,8 @@ export type ParseResult = { ok: true; program: Program } | { ok: false; errors: 
 export interface Shape {
   inputs: number;
   outputs: number;
+  /** The rules' setup knobs. Without them a "setup" block is rejected. */
+  setup?: readonly SetupKnob[];
 }
 
 class Fail extends Error {
@@ -53,11 +56,20 @@ export function parseAgent(text: string, shape: Shape): ParseResult {
       fail("too_large", `The file is ${Math.ceil(bytes / 1024)} KB; the limit is ${MAX_FILE_BYTES / 1024} KB.`);
     }
     const data = parseJson(text);
+    const withSetup = (program: Program): ParseResult => {
+      if (isObject(data) && data.setup !== undefined) {
+        if (!shape.setup) return fail("bad_field", "This rules version has no car setup, so remove the \"setup\" block.");
+        const errors = validateSetup(shape.setup, data.setup);
+        if (errors.length) return fail("bad_field", errors[0]!, "See the setup table on the rules page.");
+      }
+      if (shape.setup) program.setup = completeSetup(shape.setup, isObject(data) ? (data.setup as Record<string, number> | undefined) : undefined);
+      return { ok: true, program };
+    };
     if (isObject(data) && Array.isArray(data.nodes) && Array.isArray(data.connections)) {
-      return { ok: true, program: compileGenome(data, shape) };
+      return withSetup(compileGenome(data, shape));
     }
     if (isObject(data) && Array.isArray(data.layers)) {
-      return { ok: true, program: compileMlp(data, shape) };
+      return withSetup(compileMlp(data, shape));
     }
     return fail(
       "unknown_format",

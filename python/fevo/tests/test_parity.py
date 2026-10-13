@@ -11,7 +11,8 @@ FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "node-laps.json").rea
 
 def test_python_compiler_matches_typescript():
     for case in FIXTURE["cases"]:
-        program = from_json((ROOT / "examples" / f"{case['agent']}.json").read_text())
+        program = from_json(case["text"])
+        assert program.fingerprint() == case["fingerprint"], case["agent"]
         packed = program.packed()
         for key in ("slotCount", "io", "nodeInts", "nodeFloats", "linkSlots", "linkWeights"):
             assert packed[key] == case["program"][key], f"{case['agent']} {key}"
@@ -20,7 +21,7 @@ def test_python_compiler_matches_typescript():
 def test_python_laps_are_bit_identical_to_node():
     sim = Simulator()
     for case in FIXTURE["cases"]:
-        program = from_json((ROOT / "examples" / f"{case['agent']}.json").read_text())
+        program = from_json(case["text"])
         result = fevo.evaluate(program, case["trackId"], sim=sim)
         got = [(l.seed, l.status, l.steps, l.gates_passed, l.hash) for l in result.laps]
         want = [(l["seed"], l["status"], l["steps"], l["gatesPassed"], l["hash"]) for l in case["laps"]]
@@ -98,10 +99,15 @@ def test_errors_match_website_wording():
         from_json(json.dumps({"layers": [13, 2], "weights": [[0] * 26], "biases": [[0, 0]]}))
 
 
-def test_fingerprint_matches_website():
-    # The website showed fingerprint 6f77df for examples/example-genome.json.
-    program = from_json((ROOT / "examples" / "example-genome.json").read_text())
-    assert program.fingerprint().startswith("6f77df")
+def test_setup_validation_and_default():
+    import pytest
+
+    text = (ROOT / "examples" / "example-mlp.json").read_text()
+    assert from_json(text).setup == [0.3, 0.45, 0.0, 0.58]
+    with pytest.raises(fevo.AgentError, match="between 0 and 1"):
+        from_json(json.dumps({**json.loads(text), "setup": {"wing": 1.5}}))
+    with pytest.raises(fevo.AgentError, match='Unknown setup "gears"'):
+        from_json(json.dumps({**json.loads(text), "setup": {"gears": 8}}))
 
 
 def test_step_fast_matches_step():

@@ -75,6 +75,8 @@ class Simulator:
         self.rules = load_rules(rules) if isinstance(rules, str) else rules
         self.track: Track | None = None
         self.program: Program | None = None
+        self.setup: list[float] | None = None
+        self._practice: Practice | None = None
         self._status = {name: self.core.global_value(f"STATUS_{name.upper().replace('-', '_')}") for name in STATUS}
         self.configure()
 
@@ -83,7 +85,8 @@ class Simulator:
     def configure(self, practice: Practice | None = None) -> None:
         """Apply the rules, plus optional practice settings (None = official)."""
         r = self.rules.raw
-        packed = r["carParamsPacked"]
+        self._practice = practice
+        packed = self.rules.packed_car(self.setup)
         self.core.write_f64(packed)
         self.core.call("setCarParamsFromScratch", len(packed))
         self.core.call("setTiming", r["timing"]["agentHz"], r["timing"]["physicsSubsteps"])
@@ -105,7 +108,15 @@ class Simulator:
         self.track = t
         return t
 
+    def set_setup(self, setup: list[float] | None) -> None:
+        """Change the car setup (values in knob order; None = default), keeping the current practice settings."""
+        if setup != self.setup:
+            self.setup = None if setup is None else list(setup)
+            self.configure(self._practice)
+
     def load_program(self, program: Program) -> None:
+        """Load an agent; its setup (if any) becomes the car's setup."""
+        self.set_setup(program.setup)
         p = program.packed()
         self.core.write_i32(p["io"] + p["nodeInts"] + p["linkSlots"])
         self.core.write_f64(p["nodeFloats"] + p["linkWeights"])

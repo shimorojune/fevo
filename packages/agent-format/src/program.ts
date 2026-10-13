@@ -24,6 +24,8 @@ export interface Program {
   /** Slots read as [steer, throttle]. */
   outputSlots: number[];
   nodes: ProgramNode[];
+  /** Car setup, complete and in the rules' knob order (present when parsed against a rules version). */
+  setup?: number[];
 }
 
 export interface PackedProgram {
@@ -71,7 +73,8 @@ export function parameterCount(p: Program): number {
 
 /** Canonical text of a program, for fingerprints. Two files that compile to the same network share it. */
 export function canonicalProgram(p: Program): string {
-  return JSON.stringify([p.kind, p.slotCount, p.inputSlots, p.outputSlots, p.nodes]);
+  const base = [p.kind, p.slotCount, p.inputSlots, p.outputSlots, p.nodes];
+  return JSON.stringify(p.setup ? [...base, p.setup] : base);
 }
 
 /** SHA-256 of the canonical program, hex. The UI shows the first 6 characters. */

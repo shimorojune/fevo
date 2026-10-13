@@ -1,4 +1,5 @@
 import type { CarParams } from "./car.ts";
+import type { SetupKnob } from "./setup.ts";
 
 /**
  * Rules version solo-1: one car, time attack, no tyre wear, fuel or slipstream.
@@ -40,10 +41,62 @@ export const SOLO_1_CAR = {
   dynamicAboveMps: 6,
 } as const satisfies CarParams;
 
+/**
+ * Setup knobs for solo-1, modelled on what F1 teams actually trade off.
+ * The base car above is the default setup. Effects are per unit of the knob.
+ */
+export const SOLO_1_SETUP = [
+  {
+    id: "wing",
+    label: "Wing level",
+    min: 0,
+    max: 1,
+    default: 0.3,
+    help: "Front and rear wing angle together. 0 is a Monza low-drag trim, 1 a Monaco-style maximum-downforce trim: more grip in corners, more drag on the straights.",
+    effects: [
+      { param: "downforceAreaM2", perUnit: 2.0 },
+      { param: "dragAreaM2", perUnit: 0.35 },
+    ],
+  },
+  {
+    id: "aeroBalance",
+    label: "Aero balance",
+    min: 0.4,
+    max: 0.5,
+    default: 0.45,
+    help: "Share of downforce on the front axle. More front sharpens turn-in at speed but makes the rear lighter in fast corners.",
+    effects: [{ param: "aeroBalanceFront", perUnit: 1 }],
+  },
+  {
+    id: "antiRollBalance",
+    label: "Anti-roll bar balance",
+    min: -1,
+    max: 1,
+    default: 0,
+    help: "Front bar stiffer (+) or rear bar stiffer (−). A stiffer front bar makes the front respond faster but take more of the load transfer, so it grips less at the limit (understeer); a stiffer rear does the opposite (oversteer). Matters most in slow corners.",
+    effects: [
+      { param: "pacejkaBFront", perUnit: 1.5 },
+      { param: "pacejkaBRear", perUnit: -1.5 },
+      { param: "tyreMuFront", perUnit: -0.06 },
+      { param: "tyreMuRear", perUnit: 0.06 },
+    ],
+  },
+  {
+    id: "brakeBias",
+    label: "Brake bias",
+    min: 0.52,
+    max: 0.64,
+    default: 0.58,
+    help: "Share of brake force on the front axle. Forward is stable but locks the fronts sooner; rearward uses more of the rears and stops shorter, until the rear locks and the car turns round.",
+    effects: [{ param: "brakeBiasFront", perUnit: 1 }],
+  },
+] as const satisfies readonly SetupKnob[];
+
 export const SOLO_1 = {
   id: "solo-1",
   simVersion: "1.0.0",
   car: SOLO_1_CAR,
+  setup: SOLO_1_SETUP,
   timing: {
     /** Agent decisions per second. Lap time = steps / agentHz. */
     agentHz: 60,

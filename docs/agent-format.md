@@ -55,6 +55,23 @@ A genome exported from neat-python with every node's `bias`, `response`, `activa
 - Weights are row-major `[out][in]`, which is what PyTorch's `layer.weight.flatten()` gives.
 - Activations use the textbook definitions: `tanh`, `sigmoid`, `relu`, `identity`. `outputActivation` defaults to `activation`.
 
+## Car setup
+
+Either format may carry a `"setup"` block. Anything left out uses the default; values outside the published ranges are rejected. The setup changes the car for all three official laps and is part of the fingerprint.
+
+```json
+"setup": { "wing": 0.15, "aeroBalance": 0.44, "antiRollBalance": -0.3, "brakeBias": 0.57 }
+```
+
+| Key | Range | Default | Effect |
+|---|---|---|---|
+| `wing` | 0–1 | 0.3 | Downforce area 3.4–5.4 m², drag area 1.15–1.50 m² (≈370 → 330 km/h top speed) |
+| `aeroBalance` | 0.40–0.50 | 0.45 | Share of downforce on the front axle |
+| `antiRollBalance` | −1–1 | 0 | Stiffer front bar (+): sharper front response, less front grip at the limit; stiffer rear (−) the opposite |
+| `brakeBias` | 0.52–0.64 | 0.58 | Share of brake force on the front axle |
+
+Every knob is linear (`param = base + perUnit × (value − default)`); the exact numbers are in `packages/rules/src/solo1.ts` and on the rules page.
+
 ## Examples
 
 `examples/example-genome.json` and `examples/example-mlp.json` are tiny hand-structured agents tuned to finish every solo-1 circuit. They show the formats; they are not fast.

@@ -175,3 +175,17 @@ test("function code tables have no collisions", () => {
   assert.equal(new Set(codes).size, codes.length);
   assert.equal(new Set(Object.values(AGGREGATIONS)).size, Object.keys(AGGREGATIONS).length);
 });
+
+
+import { SOLO_1_SETUP } from "@fevo/rules";
+
+test("setup block: validated against the rules, completed with defaults, part of the fingerprint", async () => {
+  const shape = { ...SHAPE, setup: SOLO_1_SETUP };
+  const withSetup = ok(parseAgent(JSON.stringify({ ...genome(), setup: { wing: 0.1 } }), shape));
+  assert.deepEqual(withSetup.setup, [0.1, 0.45, 0, 0.58]);
+  const plain = ok(parseAgent(JSON.stringify(genome()), shape));
+  assert.deepEqual(plain.setup, [0.3, 0.45, 0, 0.58]);
+  assert.notEqual(await fingerprint(withSetup), await fingerprint(plain));
+  assert.match(err(parseAgent(JSON.stringify({ ...genome(), setup: { wing: 3 } }), shape)).message, /between 0 and 1/);
+  assert.equal(err(parseAgent(JSON.stringify({ ...genome(), setup: { wing: 0.1 } }), SHAPE)).code, "bad_field");
+});

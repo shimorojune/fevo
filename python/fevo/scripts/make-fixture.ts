@@ -7,15 +7,20 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { packProgram, parseAgent } from "@fevo/agent-format";
+import { fingerprint, packProgram, parseAgent } from "@fevo/agent-format";
 import { SOLO_1 as R } from "@fevo/rules";
 import { runOfficialLaps } from "@fevo/sim";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..", "..");
 const cases = [];
-for (const name of ["example-genome", "example-mlp"]) {
-  const parsed = parseAgent(readFileSync(join(root, "examples", `${name}.json`), "utf8"), { inputs: 15, outputs: 2 });
+// The MLP also runs with a non-default setup, so the Python car-from-setup maths is checked too.
+const SETUP = { wing: 0.05, aeroBalance: 0.47, antiRollBalance: -0.4, brakeBias: 0.55 };
+for (const name of ["example-genome", "example-mlp", "example-mlp+setup"]) {
+  const file = name.replace("+setup", "");
+  const json = JSON.parse(readFileSync(join(root, "examples", `${file}.json`), "utf8"));
+  const text = JSON.stringify(name.endsWith("+setup") ? { ...json, setup: SETUP } : json);
+  const parsed = parseAgent(text, { inputs: 15, outputs: 2, setup: R.setup });
   if (!parsed.ok) throw new Error(parsed.errors[0]!.message);
   const p = packProgram(parsed.program);
   for (const trackId of ["spielberg", "monza", "austin"]) {
@@ -23,6 +28,8 @@ for (const name of ["example-genome", "example-mlp"]) {
     const r = runOfficialLaps(R, track, parsed.program);
     cases.push({
       agent: name,
+      text,
+      fingerprint: await fingerprint(parsed.program),
       trackId,
       program: {
         slotCount: p.slotCount,

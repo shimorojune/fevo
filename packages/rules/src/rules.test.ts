@@ -40,3 +40,45 @@ test("top speed implied by power and drag is F1-like", () => {
   const kmh = lo * 3.6;
   assert.ok(kmh > 320 && kmh < 370, `top speed ${kmh.toFixed(1)} km/h`);
 });
+
+import { applySetup, completeSetup, validateSetup } from "./setup.ts";
+import { SOLO_1_SETUP } from "./solo1.ts";
+
+test("default setup is the base car", () => {
+  assert.deepEqual(applySetup(SOLO_1_CAR, SOLO_1_SETUP, undefined), { ...SOLO_1_CAR });
+  assert.deepEqual(applySetup(SOLO_1_CAR, SOLO_1_SETUP, { wing: 0.3 }), { ...SOLO_1_CAR });
+});
+
+test("knob defaults are inside their ranges and effects hit real params", () => {
+  for (const k of SOLO_1_SETUP) {
+    assert.ok(k.min <= k.default && k.default <= k.max, k.id);
+    for (const e of k.effects) assert.ok(e.param in SOLO_1_CAR, `${k.id} → ${e.param}`);
+  }
+});
+
+test("wing trades top speed for downforce within F1-like limits", () => {
+  const top = (cda: number, c = SOLO_1_CAR) => {
+    let lo = 0;
+    let hi = 200;
+    for (let i = 0; i < 80; i++) {
+      const v = (lo + hi) / 2;
+      if ((0.5 * c.airDensityKgM3 * cda * v * v + c.rollingResistance * c.massKg * c.gravityMps2) * v > c.powerW) hi = v;
+      else lo = v;
+    }
+    return lo * 3.6;
+  };
+  const low = applySetup(SOLO_1_CAR, SOLO_1_SETUP, { wing: 0 });
+  const high = applySetup(SOLO_1_CAR, SOLO_1_SETUP, { wing: 1 });
+  assert.ok(low.downforceAreaM2 < SOLO_1_CAR.downforceAreaM2 && high.downforceAreaM2 > SOLO_1_CAR.downforceAreaM2);
+  const tl = top(low.dragAreaM2);
+  const th = top(high.dragAreaM2);
+  assert.ok(tl > 355 && tl < 380, `low wing ${tl.toFixed(0)} km/h`);
+  assert.ok(th > 315 && th < 345, `high wing ${th.toFixed(0)} km/h`);
+});
+
+test("setup validation explains problems", () => {
+  assert.deepEqual(validateSetup(SOLO_1_SETUP, { wing: 0.5, brakeBias: 0.6 }), []);
+  assert.match(validateSetup(SOLO_1_SETUP, { wing: 2 })[0]!, /between 0 and 1/);
+  assert.match(validateSetup(SOLO_1_SETUP, { gears: 7 })[0]!, /Unknown setup "gears"/);
+  assert.deepEqual(completeSetup(SOLO_1_SETUP, { wing: 0.5 }), [0.5, 0.45, 0, 0.58]);
+});

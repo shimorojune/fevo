@@ -46,6 +46,8 @@ class Program:
     input_slots: list[int]
     output_slots: list[int]
     nodes: list[Node]
+    #: Car setup, complete and in the rules' knob order (None: default car, no setup block allowed).
+    setup: list[float] | None = None
 
     @property
     def parameters(self) -> int:
@@ -78,7 +80,8 @@ class Program:
             return (f'{{"slot":{n.slot},"activation":{n.activation},"aggregation":{n.aggregation},'
                     f'"bias":{_js_num(n.bias)},"response":{_js_num(n.response)},"links":[{links}]}}')  # fmt: skip
         ints = lambda xs: ",".join(map(str, xs))  # noqa: E731
-        text = f'["{self.kind}",{self.slot_count},[{ints(self.input_slots)}],[{ints(self.output_slots)}],[{",".join(map(node, self.nodes))}]]'
+        setup = f',[{",".join(_js_num(v) for v in self.setup)}]' if self.setup is not None else ""
+        text = f'["{self.kind}",{self.slot_count},[{ints(self.input_slots)}],[{ints(self.output_slots)}],[{",".join(map(node, self.nodes))}]{setup}]'
         return hashlib.sha256(text.encode()).hexdigest()
 
 
@@ -122,11 +125,11 @@ def from_neat(genome: Any, config: Any) -> Program:
     return from_json(json.dumps(neat_to_json(genome, config)), len(config.genome_config.input_keys), len(config.genome_config.output_keys))
 
 
-def neat_to_json(genome: Any, config: Any) -> dict[str, Any]:
+def neat_to_json(genome: Any, config: Any, setup: dict[str, float] | None = None) -> dict[str, Any]:
     """The upload file for a neat-python genome: every field the website needs, in neat-python's order."""
     gc = config.genome_config
     outputs = set(gc.output_keys)
-    return {
+    out = {
         "inputKeys": list(gc.input_keys),
         "outputKeys": list(gc.output_keys),
         "nodes": [
@@ -138,13 +141,26 @@ def neat_to_json(genome: Any, config: Any) -> dict[str, Any]:
             {"in": a, "out": b, "weight": c.weight, "enabled": c.enabled} for (a, b), c in genome.connections.items()
         ],
     }  # fmt: skip
+    if setup:
+        out["setup"] = dict(setup)
+    return out
 
 
 # --------------------------------------------------------------------------- uploaded JSON
 
 
-def from_json(text: str, inputs: int = 15, outputs: int = 2) -> Program:
-    """Validate and compile an uploaded-format JSON agent, like the website does."""
+_RULES_SETUP = object()
+
+
+def from_json(text: str, inputs: int = 15, outputs: int = 2, setup_knobs: Any = _RULES_SETUP) -> Program:
+    """Validate and compile an uploaded-format JSON agent, like the website does.
+
+    The setup block is checked against the current rules' knobs (pass setup_knobs=None for
+    a rules version without setups)."""
+    if setup_knobs is _RULES_SETUP:
+        from .data import load_rules
+
+        setup_knobs = load_rules().setup
     if len(text.encode()) > MAX_FILE_BYTES:
         raise AgentError("too_large", f"The file is over {MAX_FILE_BYTES // 1024} KB.")
     try:
@@ -152,10 +168,30 @@ def from_json(text: str, inputs: int = 15, outputs: int = 2) -> Program:
     except json.JSONDecodeError as e:
         raise AgentError("invalid_json", f"This file isn't valid JSON. Line {e.lineno}, column {e.colno}: {e.msg}.") from None
     if isinstance(data, dict) and isinstance(data.get("nodes"), list) and isinstance(data.get("connections"), list):
-        return _compile_genome(data, inputs, outputs)
+        return _with_setup(_compile_genome(data, inputs, outputs), data, setup_knobs)
     if isinstance(data, dict) and isinstance(data.get("layers"), list):
-        return _compile_mlp(data, inputs, outputs)
+        return _with_setup(_compile_mlp(data, inputs, outputs), data, setup_knobs)
     raise AgentError("unknown_format", "This doesn't look like a NEAT genome or an MLP.")
+
+
+def _with_setup(program: Program, data: dict[str, Any], knobs: list[dict[str, Any]] | None) -> Program:
+    given = data.get("setup")
+    if given is not None:
+        if not knobs:
+            raise AgentError("bad_field", 'This rules version has no car setup, so remove the "setup" block.')
+        if not isinstance(given, dict):
+            raise AgentError("bad_field", '"setup" must be an object.')
+        for key, value in given.items():
+            k = next((x for x in knobs if x["id"] == key), None)
+            if k is None:
+                raise AgentError("bad_field", f'Unknown setup "{key}". Known: {", ".join(x["id"] for x in knobs)}.')
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise AgentError("bad_field", f"setup.{key} must be a number.")
+            if not k["min"] <= value <= k["max"]:
+                raise AgentError("bad_field", f"setup.{key} is {value}; it must be between {k['min']} and {k['max']}.")
+    if knobs:
+        program.setup = [float(given[k["id"]]) if given and k["id"] in given else float(k["default"]) for k in knobs]
+    return program
 
 
 def _num(v: Any, field: str) -> float:

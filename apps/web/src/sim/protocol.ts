@@ -8,6 +8,8 @@ export interface AgentSummary {
   parameters: number;
   fingerprint: string;
   bytes: number;
+  /** Setup values in the rules' knob order. */
+  setup: number[];
 }
 
 export type Request = { id: number; type: "run"; trackId: string; agentText: string };

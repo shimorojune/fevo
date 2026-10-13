@@ -41,6 +41,37 @@ export function Rules() {
         </table>
       </section>
 
+      <section className="panel panel-pad stack" id="setup">
+        <h2>Car setup</h2>
+        <p className="muted">
+          An agent file may include a <code>"setup"</code> block. Anything left out uses the default. Each knob moves the car along a real trade-off; none of
+          them adds free speed. The setup is part of the agent's fingerprint and is shown with every replay.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Range</th>
+              <th>Default</th>
+              <th>What it does</th>
+            </tr>
+          </thead>
+          <tbody>
+            {R.setup.map((k) => (
+              <tr key={k.id}>
+                <td className="mono">{k.id}</td>
+                <td className="mono">
+                  {k.min} to {k.max}
+                </td>
+                <td className="mono">{k.default}</td>
+                <td>{k.help}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <pre>{`"setup": { "wing": 0.15, "aeroBalance": 0.44, "antiRollBalance": -0.3, "brakeBias": 0.57 }`}</pre>
+      </section>
+
       <section className="panel panel-pad stack">
         <h2>2. Track and lap</h2>
         <p>

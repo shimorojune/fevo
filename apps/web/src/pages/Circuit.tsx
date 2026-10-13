@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { TEAMS, circuitBrand } from "@fevo/branding";
 import { SOLO_1 as R } from "@fevo/rules";
 import { LapsTable } from "../components/Laps";
+import { SetupSummary } from "../components/SetupSummary";
 import { Replay } from "../components/Replay";
 import { useAgents } from "../lib/agents";
 import { km, lapTime } from "../lib/format";
@@ -108,6 +109,12 @@ export function Circuit() {
             </dl>
           ) : (
             <p className="muted small">Checking…</p>
+          )}
+          {run.summary && (
+            <>
+              <h3>Car setup</h3>
+              <SetupSummary setup={run.summary.setup} />
+            </>
           )}
           <p className="small muted">
             {agent.demo

@@ -22,7 +22,7 @@ self.onmessage = async (e: MessageEvent<Request>) => {
   const { id, trackId, agentText } = e.data;
   try {
     const t0 = performance.now();
-    const parsed = parseAgent(agentText, { inputs: R.observation.length, outputs: R.action.length });
+    const parsed = parseAgent(agentText, { inputs: R.observation.length, outputs: R.action.length, setup: R.setup });
     if (!parsed.ok) return post({ id, type: "checked", ok: false, errors: parsed.errors, ms: performance.now() - t0 });
     const p = parsed.program;
     post({
@@ -37,12 +37,13 @@ self.onmessage = async (e: MessageEvent<Request>) => {
         parameters: parameterCount(p),
         fingerprint: await fingerprint(p),
         bytes: new TextEncoder().encode(agentText).length,
+        setup: p.setup ?? [],
       },
     });
 
     const { configure, loadAgent, loadTrack, runLap, summarizeOfficial } = await simModule;
     const track = await loadTrackFile(trackId);
-    configure(R);
+    configure(R, p.setup);
     loadTrack(track);
     loadAgent(p);
     const laps: LapResult[] = [];
