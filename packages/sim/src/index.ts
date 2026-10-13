@@ -124,12 +124,19 @@ export function runOfficialLaps(rules: Rules, track: TrackFile, program: Program
   loadTrack(track);
   loadAgent(program);
   const laps = rules.seeds.map((_, i) => ({ ...runLap(rules, i), gateCount: track.gates.length }));
+  return summarizeOfficial(laps);
+}
+
+/**
+ * Ranking rule from the rules page: the median of three laps, where an
+ * unfinished lap counts as slower than any finished one. With unfinished
+ * laps as +infinity, the median is the second-fastest finished lap, so two
+ * finished laps are needed to be ranked.
+ */
+export function summarizeOfficial(laps: LapResult[]): OfficialResult {
   const finished = laps.filter((l) => l.status === "finished").map((l) => l.steps).sort((a, b) => a - b);
   const ranked = finished.length >= 2;
-  // Median of three with unfinished laps as +infinity: the middle value is the
-  // second-fastest finished lap when at least two finished.
-  const medianSteps = ranked ? finished[1]! : null;
-  return { laps, medianSteps, ranked };
+  return { laps, medianSteps: ranked ? finished[1]! : null, ranked };
 }
 
 /** Steps to "m:ss.hh" at the rules' agent rate. */

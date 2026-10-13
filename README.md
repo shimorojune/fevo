@@ -8,6 +8,7 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 
 | Path | What |
 |---|---|
+| `apps/web` | The site: Vite + React. Circuits, upload, replay and rules; laps run in a Web Worker on the same wasm. `pnpm --filter @fevo/web dev` |
 | `packages/rules` | Rules versions (solo-1): car params in SI units, timing, seeds, sensors. Single source of truth. |
 | `packages/branding` | Every team livery and circuit display name. Flip `BRANDING_MODE` to go generic everywhere. |
 | `packages/tracks` | Baked track file format; baked tracks land in `packages/tracks/data/`. |
@@ -19,7 +20,7 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 | `tools/replay` | Runs agents on every circuit and writes a self-contained replay page. |
 | `tools/parity` | Builds the neat-python parity fixture (needs Python with neat-python 2.0). |
 
-Planned next: `packages/render`, `apps/web`, `apps/api`, `apps/verifier`, `tools/golden`, `python/fevo-gym`.
+Planned next: `apps/api` and the verifier (server re-runs), leaderboard, `tools/golden`, `python/fevo-gym`.
 
 ## Commands
 
