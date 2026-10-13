@@ -1,0 +1,25 @@
+{
+  "name": "@fevo/sim-core",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic simulator core in AssemblyScript. One .wasm runs in browsers, the Node verifier and Python.",
+  "exports": {
+    ".": {
+      "types": "./build/sim.d.ts",
+      "default": "./build/sim.js"
+    },
+    "./sim.wasm": "./build/sim.wasm"
+  },
+  "files": ["build"],
+  "scripts": {
+    "build": "asc assembly/index.ts --target release",
+    "build:debug": "asc assembly/index.ts --target debug",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@fevo/rules": "workspace:*",
+    "@types/node": "^24.3.0",
+    "assemblyscript": "^0.28.2"
+  }
+}

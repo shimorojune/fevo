@@ -1,0 +1,169 @@
+// Dynamic single-track (bicycle) model with simplified Pacejka lateral tyres,
+// a friction ellipse per axle, aero downforce and drag, and power-limited
+// rear drive. Blends to a kinematic model at walking pace, where slip angles
+// are undefined.
+//
+// Frames: world x/y in metres with y up, yaw counter-clockwise from +x.
+// Body frame: vx forward, vy to the left, r = yaw rate (counter-clockwise).
+// Every Math call here is AssemblyScript's own implementation compiled into
+// the wasm, so results are bit-identical in every engine.
+
+import {
+  AERO_BALANCE_FRONT,
+  AIR_DENSITY,
+  BRAKE_BIAS_FRONT,
+  CG_TO_FRONT,
+  DOWNFORCE_AREA,
+  DRAG_AREA,
+  DYNAMIC_ABOVE,
+  GRAVITY,
+  KINEMATIC_BELOW,
+  MASS,
+  MAX_BRAKE_FORCE,
+  MAX_STEER,
+  PACEJKA_B,
+  PACEJKA_C,
+  PACEJKA_E,
+  POWER,
+  ROLLING_RESISTANCE,
+  STEER_RATE,
+  TYRE_MU,
+  WHEELBASE,
+  YAW_INERTIA,
+  p,
+} from "./params";
+
+/** Slip angles are computed with at least this forward speed. */
+const MIN_SLIP_SPEED: f64 = 0.5;
+/** Drive force uses at least this speed in P / v, so launch is traction-limited. */
+const MIN_DRIVE_SPEED: f64 = 1.0;
+
+export let x: f64 = 0;
+export let y: f64 = 0;
+export let yaw: f64 = 0;
+export let vx: f64 = 0;
+export let vy: f64 = 0;
+export let r: f64 = 0;
+/** Road-wheel steering angle. */
+export let delta: f64 = 0;
+
+export function resetVehicle(px: f64, py: f64, pyaw: f64, pvx: f64): void {
+  x = px;
+  y = py;
+  yaw = wrapAngle(pyaw);
+  vx = pvx;
+  vy = 0;
+  r = 0;
+  delta = 0;
+}
+
+/**
+ * Advance one physics substep.
+ * steerCmd and throttleCmd are already clamped to [-1, 1] and finite.
+ */
+export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
+  // Steering actuator: move towards the commanded angle at a limited rate.
+  const target = steerCmd * p(MAX_STEER);
+  const maxMove = p(STEER_RATE) * dt;
+  delta += clamp(target - delta, -maxMove, maxMove);
+
+  const m = p(MASS);
+  const L = p(WHEELBASE);
+  const a = p(CG_TO_FRONT);
+  const b = L - a;
+  const g = p(GRAVITY);
+  const mu = p(TYRE_MU);
+
+  // Aero.
+  const q = 0.5 * p(AIR_DENSITY) * vx * vx;
+  const downforce = q * p(DOWNFORCE_AREA);
+  const drag = q * p(DRAG_AREA);
+  const aeroFront = p(AERO_BALANCE_FRONT);
+
+  // Normal loads: static split plus downforce. No load transfer in solo-1.
+  const fzf = (m * g * b) / L + downforce * aeroFront;
+  const fzr = (m * g * a) / L + downforce * (1.0 - aeroFront);
+
+  // Longitudinal demand.
+  let fxf: f64 = 0;
+  let fxr: f64 = 0;
+  if (throttleCmd >= 0) {
+    fxr = (throttleCmd * p(POWER)) / Math.max(vx, MIN_DRIVE_SPEED);
+  } else if (vx > 0) {
+    const brake = -throttleCmd * p(MAX_BRAKE_FORCE);
+    const bias = p(BRAKE_BIAS_FRONT);
+    fxf = -brake * bias;
+    fxr = -brake * (1.0 - bias);
+  }
+
+  // Lateral tyre forces from slip angles.
+  const vxs = Math.max(vx, MIN_SLIP_SPEED);
+  const alphaF = delta - Math.atan2(vy + a * r, vxs);
+  const alphaR = -Math.atan2(vy - b * r, vxs);
+  let fyf = pacejka(alphaF, fzf);
+  let fyr = pacejka(alphaR, fzr);
+
+  // Friction ellipse per axle: longitudinal force first, lateral gets what's left.
+  const capF = mu * fzf;
+  const capR = mu * fzr;
+  fxf = clamp(fxf, -capF, capF);
+  fxr = clamp(fxr, -capR, capR);
+  const latF = Math.sqrt(Math.max(capF * capF - fxf * fxf, 0));
+  const latR = Math.sqrt(Math.max(capR * capR - fxr * fxr, 0));
+  fyf = clamp(fyf, -latF, latF);
+  fyr = clamp(fyr, -latR, latR);
+
+  const rolling = vx > 0 ? p(ROLLING_RESISTANCE) * m * g : 0.0;
+  const cd = Math.cos(delta);
+  const sd = Math.sin(delta);
+
+  const ax = (fxr + fxf * cd - fyf * sd - drag - rolling) / m + vy * r;
+  const ay = (fyr + fyf * cd + fxf * sd) / m - vx * r;
+  const yawAcc = (a * (fyf * cd + fxf * sd) - b * fyr) / p(YAW_INERTIA);
+
+  // Semi-implicit Euler: velocities first, then positions with the new velocities.
+  let nvx = vx + ax * dt;
+  if (nvx < 0) nvx = 0; // No reverse gear in solo-1.
+  let nvy = vy + ay * dt;
+  let nr = r + yawAcc * dt;
+
+  // Below walking pace slip angles are meaningless: blend to the kinematic model.
+  const lo = p(KINEMATIC_BELOW);
+  const hi = p(DYNAMIC_ABOVE);
+  const w = clamp((nvx - lo) / (hi - lo), 0, 1);
+  if (w < 1) {
+    const tanD = Math.tan(delta);
+    const vyKin = (nvx * b * tanD) / L;
+    const rKin = (nvx * tanD) / L;
+    nvy = w * nvy + (1.0 - w) * vyKin;
+    nr = w * nr + (1.0 - w) * rKin;
+  }
+
+  vx = nvx;
+  vy = nvy;
+  r = nr;
+
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  x += (vx * cy - vy * sy) * dt;
+  y += (vx * sy + vy * cy) * dt;
+  yaw = wrapAngle(yaw + r * dt);
+}
+
+function pacejka(alpha: f64, fz: f64): f64 {
+  const ba = p(PACEJKA_B) * alpha;
+  return p(TYRE_MU) * fz * Math.sin(p(PACEJKA_C) * Math.atan(ba - p(PACEJKA_E) * (ba - Math.atan(ba))));
+}
+
+// @ts-ignore: decorator
+@inline
+function clamp(v: f64, lo: f64, hi: f64): f64 {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+export function wrapAngle(a: f64): f64 {
+  const twoPi = 2.0 * Math.PI;
+  while (a > Math.PI) a -= twoPi;
+  while (a < -Math.PI) a += twoPi;
+  return a;
+}

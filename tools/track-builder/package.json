@@ -1,0 +1,19 @@
+{
+  "name": "@fevo/track-builder",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "fetch-tumftm": "node src/fetch-tumftm.ts",
+    "bake": "node src/cli.ts"
+  },
+  "dependencies": {
+    "@fevo/tracks": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}
