@@ -25,6 +25,7 @@ pnpm test
 
 pnpm --filter @fevo/track-builder fetch-tumftm   # download TUMFTM CSVs (LGPL-3.0)
 pnpm --filter @fevo/track-builder bake spielberg         # bake one circuit
+pnpm --filter @fevo/track-builder preview                # render baked tracks to tools/track-builder/out/preview.html
 ```
 
 Requires Node 24 (tests run TypeScript directly via Node's type stripping).

@@ -56,6 +56,12 @@ importers:
 
   tools/track-builder:
     dependencies:
+      '@fevo/branding':
+        specifier: workspace:*
+        version: link:../../packages/branding
+      '@fevo/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@fevo/tracks':
         specifier: workspace:*
         version: link:../../packages/tracks

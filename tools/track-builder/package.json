@@ -7,9 +7,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test \"src/**/*.test.ts\"",
     "fetch-tumftm": "node src/fetch-tumftm.ts",
-    "bake": "node src/cli.ts"
+    "bake": "node src/cli.ts",
+    "preview": "node src/preview.ts"
   },
   "dependencies": {
+    "@fevo/branding": "workspace:*",
+    "@fevo/rules": "workspace:*",
     "@fevo/tracks": "workspace:*"
   },
   "devDependencies": {
