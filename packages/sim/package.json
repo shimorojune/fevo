@@ -1,0 +1,27 @@
+{
+  "name": "@fevo/sim",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@fevo/agent-format": "workspace:*",
+    "@fevo/rules": "workspace:*",
+    "@fevo/sim-core": "workspace:*",
+    "@fevo/tracks": "workspace:*"
+  }
+}

@@ -15,6 +15,15 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  packages/agent-format:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.19.2
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   packages/branding:
     devDependencies:
       '@types/node':
@@ -25,6 +34,28 @@ importers:
         version: 5.9.3
 
   packages/rules:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.19.2
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
+  packages/sim:
+    dependencies:
+      '@fevo/agent-format':
+        specifier: workspace:*
+        version: link:../agent-format
+      '@fevo/rules':
+        specifier: workspace:*
+        version: link:../rules
+      '@fevo/sim-core':
+        specifier: workspace:*
+        version: link:../sim-core
+      '@fevo/tracks':
+        specifier: workspace:*
+        version: link:../tracks
     devDependencies:
       '@types/node':
         specifier: ^24.3.0
@@ -53,6 +84,21 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
+
+  tools/examples:
+    dependencies:
+      '@fevo/agent-format':
+        specifier: workspace:*
+        version: link:../../packages/agent-format
+      '@fevo/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      '@fevo/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
+      '@fevo/tracks':
+        specifier: workspace:*
+        version: link:../../packages/tracks
 
   tools/track-builder:
     dependencies:

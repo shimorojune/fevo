@@ -1,0 +1,15 @@
+{
+  "name": "@fevo/examples-builder",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build-examples": "node src/make-examples.ts"
+  },
+  "dependencies": {
+    "@fevo/agent-format": "workspace:*",
+    "@fevo/rules": "workspace:*",
+    "@fevo/sim": "workspace:*",
+    "@fevo/tracks": "workspace:*"
+  }
+}

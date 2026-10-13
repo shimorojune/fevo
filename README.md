@@ -11,10 +11,14 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 | `packages/rules` | Rules versions (solo-1): car params in SI units, timing, seeds, sensors. Single source of truth. |
 | `packages/branding` | Every team livery and circuit display name. Flip `BRANDING_MODE` to go generic everywhere. |
 | `packages/tracks` | Baked track file format; baked tracks land in `packages/tracks/data/`. |
-| `packages/sim-core` | AssemblyScript simulator compiled to one `sim.wasm` for browser, Node verifier and Python. |
-| `tools/track-builder` | TUMFTM CSV → resampled, validated, hashed track JSON. |
+| `packages/sim-core` | AssemblyScript simulator compiled to one `sim.wasm` for browser, Node verifier and Python. Physics, sensors, laps and network evaluation. |
+| `packages/agent-format` | Validates uploaded agents (NEAT genome or MLP JSON) with user-facing errors and compiles them. See [docs/agent-format.md](docs/agent-format.md). |
+| `packages/sim` | The simulator API the apps use: configure rules, load track and agent, run official laps. |
+| `tools/track-builder` | TUMFTM CSV → resampled, validated, hashed track JSON, plus an HTML preview. |
+| `tools/examples` | Tunes the example agents in `examples/`. |
+| `tools/parity` | Builds the neat-python parity fixture (needs Python with neat-python 2.0). |
 
-Planned next: `packages/agent-format`, `packages/render`, `apps/web`, `apps/api`, `apps/verifier`, `tools/golden`, `python/fevo-gym`.
+Planned next: `packages/render`, `apps/web`, `apps/api`, `apps/verifier`, `tools/golden`, `python/fevo-gym`.
 
 ## Commands
 

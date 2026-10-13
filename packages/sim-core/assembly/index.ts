@@ -4,6 +4,7 @@
 // +1 full right. Internally the vehicle model uses counter-clockwise positive.
 
 import { LENGTH, PARAM_COUNT, WIDTH, p, params } from "./params";
+import * as agent from "./agent";
 import * as track from "./track";
 import * as car from "./vehicle";
 
@@ -73,6 +74,7 @@ export function setSensors(count: i32, lengthM: f64, fovRad: f64, speedNormMps: 
 }
 
 export { loadTrack } from "./track";
+export { loadAgent } from "./agent";
 
 // ---- running a lap ----
 
@@ -127,6 +129,35 @@ export function step(steer: f64, throttle: f64): i32 {
   }
   if (track.loaded) observe();
   return status;
+}
+
+/** One step driven by the loaded agent, from the current observation. */
+export function agentStep(): i32 {
+  assert(agent.loaded && agent.inputCount == rayCount + 4, "agent inputs don't match the observation");
+  agent.evaluate(obs);
+  return step(agent.outSteer, agent.outThrottle);
+}
+
+/** Drive the loaded agent until the lap ends. Returns the final status. */
+export function runAgentLap(): i32 {
+  while (status == STATUS_RUNNING) agentStep();
+  return status;
+}
+
+/** Last raw agent outputs (before clamping), for replays and telemetry. */
+export function getAgentSteer(): f64 {
+  return agent.outSteer;
+}
+export function getAgentThrottle(): f64 {
+  return agent.outThrottle;
+}
+
+const probe = new StaticArray<f64>(MAX_RAYS + 4);
+
+/** Evaluate the loaded agent on arbitrary inputs, for parity tests. */
+export function evaluateAgent(inputs: Float64Array): void {
+  for (let i = 0; i < inputs.length; i++) unchecked((probe[i] = inputs[i]));
+  agent.evaluate(probe);
 }
 
 function updateProgress(): void {
