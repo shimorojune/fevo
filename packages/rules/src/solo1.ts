@@ -5,9 +5,12 @@ import type { CarParams } from "./car.ts";
  * Times only compare within a rules version. Never edit a published version;
  * add a new one instead.
  *
- * Car numbers are first-pass estimates for a 2026-spec car (1.9 m wide,
- * 3.4 m wheelbase). They are calibrated in phase 4 against real lap times
- * and frozen before solo-1 opens.
+ * Car numbers are for a 2026-spec car (1.9 m wide, 3.4 m wheelbase). Grip,
+ * downforce, drag and brakes come from tools/calibrate: the best fit to 2025
+ * pole times that keeps the car physically plausible (358 km/h top speed,
+ * about 2.5 g at 90 km/h, 4 g at 200 km/h, 6.4 g at 300 km/h). Its reference
+ * laps are 5–10% slower than pole; the rest is track data, kerbs and the
+ * strict all-four-corners track limit.
  */
 export const SOLO_1_CAR = {
   massKg: 800,
@@ -16,19 +19,19 @@ export const SOLO_1_CAR = {
   wheelbaseM: 3.4,
   cgToFrontM: 1.87,
   yawInertiaKgM2: 1100,
-  maxSteerRad: 0.3,
+  maxSteerRad: 0.38,
   steerRateRadPerS: 2.5,
   powerW: 750_000,
-  maxBrakeForceN: 40_000,
+  maxBrakeForceN: 60_000,
   brakeBiasFront: 0.58,
-  tyreMuFront: 1.65,
-  tyreMuRear: 1.8,
+  tyreMuFront: 2.0,
+  tyreMuRear: 2.15,
   pacejkaBFront: 13,
   pacejkaBRear: 15,
   pacejkaC: 1.5,
   pacejkaE: -0.5,
-  dragAreaM2: 1.4,
-  downforceAreaM2: 4.8,
+  dragAreaM2: 1.25,
+  downforceAreaM2: 4.0,
   aeroBalanceFront: 0.45,
   airDensityKgM3: 1.2,
   rollingResistance: 0.015,

@@ -152,6 +152,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/tracks
 
+  tools/calibrate:
+    dependencies:
+      '@fevo/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      '@fevo/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+      '@fevo/tracks':
+        specifier: workspace:*
+        version: link:../../packages/tracks
+
   tools/examples:
     dependencies:
       '@fevo/agent-format':

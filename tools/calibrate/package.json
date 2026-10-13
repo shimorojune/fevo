@@ -1,0 +1,17 @@
+{
+  "name": "@fevo/calibrate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "calibrate": "node src/calibrate.ts",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "validate": "node src/validate.ts",
+    "check-grip": "node src/check-grip.ts"
+  },
+  "dependencies": {
+    "@fevo/rules": "workspace:*",
+    "@fevo/sim-core": "workspace:*",
+    "@fevo/tracks": "workspace:*"
+  }
+}

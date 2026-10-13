@@ -20,7 +20,7 @@ Single-track model, simplified Pacejka lateral tyres (peak slip ~6.5°, ~84% gri
 
 The rear tyres get more grip and cornering stiffness than the fronts, as on a real F1 car. With equal tyres the car was neutral-steering and spun as soon as power went down mid-corner.
 
-Current solo-1 numbers, measured from the wasm: 0–100 km/h 2.73 s, top speed 345 km/h, 300–0 km/h in 98.5 m, steady cornering 2.0 g at 90 km/h, 3.5 g at 200 km/h, 5.5 g at 290 km/h. Calibrated against real lap times before solo-1 is frozen.
+Calibrated on 2026-10-13 with `tools/calibrate`: a minimum-curvature racing line per circuit, a point-mass reference lap along it, and a fit of tyre grip, downforce, drag and brakes to 2025 pole times, restricted to a physically plausible car (top speed 340–360 km/h, at most about 5 g at 200 km/h and 6.5 g at 300 km/h, mechanical grip μ ≤ 2.0). Result: μ 2.0 front / 2.15 rear, downforce area 4.0 m², drag area 1.25 m², 60 kN brakes, 0.38 rad (22°) steering lock. Top speed 358 km/h; reference laps Spielberg 1:07.1, Monza 1:23.1, Austin 1:41.3, i.e. 5–10% slower than pole. Matching pole exactly needed an implausible car (10 g at 300 km/h or 400 km/h top speed), so the remaining gap is put down to track data, kerbs and the strict all-four-corners track limit. `check-grip` confirms the full vehicle model reaches about 95% of the reference's cornering grip at every speed (it understeers slightly at the limit).
 
 ## 5. Lap rules in the sim
 
