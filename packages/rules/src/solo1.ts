@@ -21,12 +21,14 @@ export const SOLO_1_CAR = {
   powerW: 750_000,
   maxBrakeForceN: 40_000,
   brakeBiasFront: 0.58,
-  tyreMu: 1.7,
-  pacejkaB: 10,
-  pacejkaC: 1.9,
-  pacejkaE: 0,
+  tyreMuFront: 1.65,
+  tyreMuRear: 1.8,
+  pacejkaBFront: 13,
+  pacejkaBRear: 15,
+  pacejkaC: 1.5,
+  pacejkaE: -0.5,
   dragAreaM2: 1.4,
-  downforceAreaM2: 3.8,
+  downforceAreaM2: 4.8,
   aeroBalanceFront: 0.45,
   airDensityKgM3: 1.2,
   rollingResistance: 0.015,
@@ -58,6 +60,7 @@ export const SOLO_1 = {
   /**
    * Fixed starting nudges, one per official lap. No RNG: a seed is an index
    * into this table, so every lap is reproducible everywhere.
+   * Positive lateralM moves the car right; positive headingRad turns it right.
    */
   seeds: [
     { lateralM: -0.5, headingRad: -0.005 },
@@ -73,6 +76,8 @@ export const SOLO_1 = {
     rayLengthM: 200,
     /** Rays spread evenly from -90° (left) to +90° (right) of the car's heading. */
     rayFovRad: Math.PI,
+    /** Observation speed = forward speed / this, clamped to [0, 1]. */
+    speedNormMps: 100,
   },
   observation: [
     "ray_0",

@@ -21,10 +21,19 @@ export interface CarParams {
   maxBrakeForceN: number;
   /** Fraction of brake force on the front axle. */
   brakeBiasFront: number;
-  /** Peak tyre friction coefficient, same for both axles. */
-  tyreMu: number;
-  /** Simplified Pacejka lateral curve: D·sin(C·atan(B·α − E·(B·α − atan(B·α)))). */
-  pacejkaB: number;
+  /**
+   * Peak tyre friction coefficient per axle. F1 rears are much wider than
+   * fronts, so the rear has more grip; that margin is what keeps the car
+   * stable under power instead of neutral-steering into a spin.
+   */
+  tyreMuFront: number;
+  tyreMuRear: number;
+  /**
+   * Simplified Pacejka lateral curve: D·sin(C·atan(B·α − E·(B·α − atan(B·α)))), D = μ·Fz.
+   * B sets cornering stiffness; a stiffer rear adds understeer.
+   */
+  pacejkaBFront: number;
+  pacejkaBRear: number;
   pacejkaC: number;
   pacejkaE: number;
   /** Drag area Cd·A. */
@@ -58,8 +67,10 @@ export const CAR_PARAM_ORDER = [
   "powerW",
   "maxBrakeForceN",
   "brakeBiasFront",
-  "tyreMu",
-  "pacejkaB",
+  "tyreMuFront",
+  "tyreMuRear",
+  "pacejkaBFront",
+  "pacejkaBRear",
   "pacejkaC",
   "pacejkaE",
   "dragAreaM2",

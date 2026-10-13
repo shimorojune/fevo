@@ -28,8 +28,10 @@ test("param slots match CAR_PARAM_ORDER", () => {
     powerW: "POWER",
     maxBrakeForceN: "MAX_BRAKE_FORCE",
     brakeBiasFront: "BRAKE_BIAS_FRONT",
-    tyreMu: "TYRE_MU",
-    pacejkaB: "PACEJKA_B",
+    tyreMuFront: "TYRE_MU_FRONT",
+    tyreMuRear: "TYRE_MU_REAR",
+    pacejkaBFront: "PACEJKA_B_FRONT",
+    pacejkaBRear: "PACEJKA_B_REAR",
     pacejkaC: "PACEJKA_C",
     pacejkaE: "PACEJKA_E",
     dragAreaM2: "DRAG_AREA",
@@ -95,6 +97,6 @@ test("same inputs give a bit-identical state", () => {
 
 test("non-finite inputs end the lap with an error", () => {
   sim.reset(0, 0, 0, 10);
-  assert.equal(sim.step(Number.NaN, 0), sim.STEP_ERROR.value);
-  assert.equal(sim.step(0, Number.POSITIVE_INFINITY), sim.STEP_ERROR.value);
+  assert.equal(sim.step(Number.NaN, 0), sim.STATUS_ERROR.value);
+  assert.equal(sim.step(0, Number.POSITIVE_INFINITY), sim.STATUS_ERROR.value);
 });

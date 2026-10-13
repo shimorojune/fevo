@@ -16,4 +16,12 @@ Real team and circuit names are trademarks; Rohit accepts the risk. All of them 
 
 ## 4. Physics: dynamic bicycle model with tyres and aero
 
-Single-track model, simplified Pacejka lateral tyres, friction ellipse per axle, downforce and drag ∝ v², power-limited rear drive, kinematic blend below 3–6 m/s. Agent at 60 Hz, physics at 240 Hz. First-pass solo-1 numbers (checked with a JS mirror of the model): 0–100 km/h 2.95 s, top speed 345 km/h, 300–0 km/h in 106 m, ~2.9 g steady at 200 km/h. Calibrated against real lap times before solo-1 is frozen.
+Single-track model, simplified Pacejka lateral tyres (peak slip ~6.5°, ~84% grip retained well past the peak), a friction circle per axle that scales drive/brake and cornering forces together, downforce and drag ∝ v², power-limited rear drive with no traction control, kinematic blend below 3–6 m/s. Agent at 60 Hz, physics at 240 Hz.
+
+The rear tyres get more grip and cornering stiffness than the fronts, as on a real F1 car. With equal tyres the car was neutral-steering and spun as soon as power went down mid-corner.
+
+Current solo-1 numbers, measured from the wasm: 0–100 km/h 2.73 s, top speed 345 km/h, 300–0 km/h in 98.5 m, steady cornering 2.0 g at 90 km/h, 3.5 g at 200 km/h, 5.5 g at 290 km/h. Calibrated against real lap times before solo-1 is frozen.
+
+## 5. Lap rules in the sim
+
+Standing start on the start line. A lap ends as crashed when any corner of the car is outside the track edges (checked every physics substep), stopped after 120 steps below 1 m/s, timed out at 12,000 steps, or errored on a NaN/infinite output. Gates must be passed in order; crossing the start line after the last gate finishes the lap. Steer is −1 left to +1 right at the API; offset and heading error in the observation are positive to the right.

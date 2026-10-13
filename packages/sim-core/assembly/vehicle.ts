@@ -1,5 +1,5 @@
 // Dynamic single-track (bicycle) model with simplified Pacejka lateral tyres,
-// a friction ellipse per axle, aero downforce and drag, and power-limited
+// a friction circle per axle, aero downforce and drag, and power-limited
 // rear drive. Blends to a kinematic model at walking pace, where slip angles
 // are undefined.
 //
@@ -21,13 +21,15 @@ import {
   MASS,
   MAX_BRAKE_FORCE,
   MAX_STEER,
-  PACEJKA_B,
+  PACEJKA_B_FRONT,
+  PACEJKA_B_REAR,
   PACEJKA_C,
   PACEJKA_E,
   POWER,
   ROLLING_RESISTANCE,
   STEER_RATE,
-  TYRE_MU,
+  TYRE_MU_FRONT,
+  TYRE_MU_REAR,
   WHEELBASE,
   YAW_INERTIA,
   p,
@@ -72,7 +74,6 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
   const a = p(CG_TO_FRONT);
   const b = L - a;
   const g = p(GRAVITY);
-  const mu = p(TYRE_MU);
 
   // Aero.
   const q = 0.5 * p(AIR_DENSITY) * vx * vx;
@@ -100,18 +101,28 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
   const vxs = Math.max(vx, MIN_SLIP_SPEED);
   const alphaF = delta - Math.atan2(vy + a * r, vxs);
   const alphaR = -Math.atan2(vy - b * r, vxs);
-  let fyf = pacejka(alphaF, fzf);
-  let fyr = pacejka(alphaR, fzr);
+  const muF = p(TYRE_MU_FRONT);
+  const muR = p(TYRE_MU_REAR);
+  let fyf = pacejka(alphaF, muF * fzf, p(PACEJKA_B_FRONT));
+  let fyr = pacejka(alphaR, muR * fzr, p(PACEJKA_B_REAR));
 
-  // Friction ellipse per axle: longitudinal force first, lateral gets what's left.
-  const capF = mu * fzf;
-  const capR = mu * fzr;
-  fxf = clamp(fxf, -capF, capF);
-  fxr = clamp(fxr, -capR, capR);
-  const latF = Math.sqrt(Math.max(capF * capF - fxf * fxf, 0));
-  const latR = Math.sqrt(Math.max(capR * capR - fxr * fxr, 0));
-  fyf = clamp(fyf, -latF, latF);
-  fyr = clamp(fyr, -latR, latR);
+  // Friction circle per axle: when the combined demand exceeds the grip
+  // available, both components shrink by the same factor, so wheelspin or
+  // lock-up costs cornering force without erasing it outright.
+  const capF = muF * fzf;
+  const capR = muR * fzr;
+  const demandF = Math.sqrt(fxf * fxf + fyf * fyf);
+  const demandR = Math.sqrt(fxr * fxr + fyr * fyr);
+  if (demandF > capF) {
+    const k = capF / demandF;
+    fxf *= k;
+    fyf *= k;
+  }
+  if (demandR > capR) {
+    const k = capR / demandR;
+    fxr *= k;
+    fyr *= k;
+  }
 
   const rolling = vx > 0 ? p(ROLLING_RESISTANCE) * m * g : 0.0;
   const cd = Math.cos(delta);
@@ -150,9 +161,10 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
   yaw = wrapAngle(yaw + r * dt);
 }
 
-function pacejka(alpha: f64, fz: f64): f64 {
-  const ba = p(PACEJKA_B) * alpha;
-  return p(TYRE_MU) * fz * Math.sin(p(PACEJKA_C) * Math.atan(ba - p(PACEJKA_E) * (ba - Math.atan(ba))));
+/** Lateral force for slip angle alpha with peak force d. */
+function pacejka(alpha: f64, d: f64, b: f64): f64 {
+  const ba = b * alpha;
+  return d * Math.sin(p(PACEJKA_C) * Math.atan(ba - p(PACEJKA_E) * (ba - Math.atan(ba))));
 }
 
 // @ts-ignore: decorator
