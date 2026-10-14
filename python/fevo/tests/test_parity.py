@@ -9,6 +9,10 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "node-laps.json").read_text())
 
 
+def _case(agent: str, track: str, rules: str) -> dict:
+    return next(c for c in FIXTURE["cases"] if (c["agent"], c["trackId"], c["rules"]) == (agent, track, rules))
+
+
 def test_python_compiler_matches_typescript():
     for case in FIXTURE["cases"]:
         program = from_json(case["text"])
@@ -19,13 +23,14 @@ def test_python_compiler_matches_typescript():
 
 
 def test_python_laps_are_bit_identical_to_node():
-    sim = Simulator()
+    sims = {rules: Simulator(rules) for rules in fevo.data.manifest()["rules"]}
+    assert {c["rules"] for c in FIXTURE["cases"]} == set(sims)
     for case in FIXTURE["cases"]:
         program = from_json(case["text"])
-        result = fevo.evaluate(program, case["trackId"], sim=sim)
+        result = fevo.evaluate(program, case["trackId"], sim=sims[case["rules"]])
         got = [(l.seed, l.status, l.steps, l.gates_passed, l.hash) for l in result.laps]
         want = [(l["seed"], l["status"], l["steps"], l["gatesPassed"], l["hash"]) for l in case["laps"]]
-        assert got == want, f"{case['agent']} on {case['trackId']}"
+        assert got == want, f"{case['agent']} on {case['trackId']} ({case['rules']})"
         assert result.median_steps == case["medianSteps"]
 
 
@@ -48,7 +53,7 @@ def test_practice_settings_reset_for_official_laps():
     slow = sim.run_lap(1)
     official = fevo.evaluate(program, "spielberg", sim=sim)
     assert slow.steps > official.laps[1].steps
-    assert official.laps[1].hash == next(c for c in FIXTURE["cases"] if c["agent"] == "example-genome" and c["trackId"] == "spielberg")["laps"][1]["hash"]
+    assert official.laps[1].hash == _case("example-genome", "spielberg", "solo-1")["laps"][1]["hash"]
 
 
 def test_start_anywhere_counts_gates_behind_as_passed():
@@ -125,3 +130,26 @@ def test_step_fast_matches_step():
         if st != "running":
             break
     assert a.state_hash() == b.state_hash()
+
+
+def test_solo2_ships_with_power_oversteer_and_solo1_without():
+    assert fevo.data.manifest()["simVersion"] == "1.1.0"
+    assert fevo.load_rules("solo-1").rear_slide == (0, 1.0)
+    assert fevo.load_rules("solo-2").rear_slide == (1, 0.88)
+    one, two = fevo.load_rules("solo-1").raw, fevo.load_rules("solo-2").raw
+    assert "tyres" not in one
+    assert {k: v for k, v in two.items() if k not in ("id", "simVersion", "tyres")} == {
+        k: v for k, v in one.items() if k not in ("id", "simVersion")
+    }
+
+
+def test_one_simulator_switching_rules_matches_fresh_ones():
+    """The rear slide model lives in the wasm, so configure() must set it every time, solo-1 included."""
+    program = from_json((ROOT / "examples" / "example-mlp.json").read_text())
+    sim = Simulator("solo-2")
+    sim.load_track("spielberg")
+    sim.load_program(program)
+    sim.run_lap(1)
+    sim.rules = fevo.load_rules("solo-1")
+    sim.configure()
+    assert sim.run_lap(1).hash == _case("example-mlp", "spielberg", "solo-1")["laps"][1]["hash"]

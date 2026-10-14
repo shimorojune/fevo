@@ -47,6 +47,33 @@ const SLIDE_LATERAL: f64 = 0.25;
 /** Reported slide intensity starts here, so even a light lock-up shows. */
 const SLIDE_MIN: f64 = 0.2;
 
+/** Rear tyre model under power: the rules choose it (solo-1 has no "tyres" block, so 0). */
+export const REAR_SLIDE_DRIVE_ONLY: i32 = 0;
+export const REAR_SLIDE_COMBINED_STICKY: i32 = 1;
+let rearSlideModel: i32 = REAR_SLIDE_DRIVE_ONLY;
+/** Combined-sticky only: a drive slide ends once demand falls below this share of sliding grip. */
+let rearSlideExit: f64 = 0.88;
+/** Combined-sticky only: the rears are sliding under power (kept between substeps). */
+export let rearSliding: bool = false;
+
+/**
+ * Choose the rear tyre model under power.
+ *
+ * REAR_SLIDE_DRIVE_ONLY (solo-1): the rears spin only in a substep where the
+ * drive force alone is more than their grip, and grip back the moment it isn't.
+ * Drive plus cornering over the limit is scaled back along the friction circle.
+ *
+ * REAR_SLIDE_COMBINED_STICKY (solo-2): with the throttle open, the rears break
+ * away as soon as drive plus cornering together (sqrt(Fx² + Fy²)) ask for more
+ * than their grip, and keep sliding until the combined demand falls below
+ * `exit` × sliding grip, or the throttle is closed: power oversteer you have
+ * to catch by lifting, not by easing off a fraction.
+ */
+export function setRearSlideModel(model: i32, exit: f64): void {
+  rearSlideModel = model;
+  rearSlideExit = exit;
+}
+
 /** Lock-up or wheelspin intensity on each axle in the last substep, 0 (gripping) to 1. */
 export let frontSlide: f64 = 0;
 /** Longitudinal acceleration from the last substep, for load transfer. */
@@ -70,6 +97,7 @@ export function resetVehicle(px: f64, py: f64, pyaw: f64, pvx: f64): void {
   vy = 0;
   frontSlide = 0;
   rearSlide = 0;
+  rearSliding = false;
   axPrev = 0;
   r = 0;
   delta = 0;
@@ -146,11 +174,25 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
       fyf *= k;
     }
   }
-  if (Math.abs(fxr) > capR) {
+  if (rearSlideModel == REAR_SLIDE_COMBINED_STICKY && fxr > 0) {
+    // Under power: break away on combined demand, stay sliding until it drops well below sliding grip.
+    const demandR = Math.sqrt(fxr * fxr + fyr * fyr);
+    const slideCap = SLIDE_MU * capR;
+    if (!rearSliding) rearSliding = demandR > capR;
+    else if (demandR < rearSlideExit * slideCap) rearSliding = false;
+    if (rearSliding) {
+      rearSlide = Math.min(1.0, Math.max(SLIDE_MIN, demandR / capR - 1.0 + SLIDE_MIN));
+      fyr = clamp(fyr, -SLIDE_LATERAL * slideCap, SLIDE_LATERAL * slideCap);
+      fxr = Math.min(fxr, Math.sqrt(slideCap * slideCap - fyr * fyr));
+    }
+  } else if (Math.abs(fxr) > capR) {
+    // Braking (or solo-1's drive-only rule): the drive or brake force alone is over the limit.
+    rearSliding = false;
     rearSlide = Math.min(1.0, Math.abs(fxr) / capR - 1.0 + SLIDE_MIN);
     fxr = Math.sign(fxr) * SLIDE_MU * capR;
     fyr = clamp(fyr, -SLIDE_LATERAL * SLIDE_MU * capR, SLIDE_LATERAL * SLIDE_MU * capR);
   } else {
+    rearSliding = false;
     const demandR = Math.sqrt(fxr * fxr + fyr * fyr);
     if (demandR > capR) {
       const k = capR / demandR;

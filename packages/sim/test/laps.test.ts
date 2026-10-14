@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { parseAgent, type Program } from "@fevo/agent-format";
-import { SOLO_1 as R } from "@fevo/rules";
+import { SOLO_1 as R, SOLO_2 } from "@fevo/rules";
 import type { TrackFile } from "@fevo/tracks";
 import { configure, formatLapTime, loadAgent, loadTrack, runLap, runOfficialLaps } from "../src/index.ts";
 
@@ -75,4 +75,20 @@ test("setup changes the car: low wing is faster on the straights, slower round t
   assert.deepEqual(plain.laps.map((l) => l.hash), asDefault.laps.map((l) => l.hash), "explicit default setup = no setup");
   const low = runOfficialLaps(R, t, parse({ wing: 0 }));
   assert.notDeepEqual(low.laps.map((l) => l.hash), plain.laps.map((l) => l.hash));
+});
+
+test("solo-2 drives the same agents differently, and configuring solo-1 afterwards gives solo-1 laps back", () => {
+  const t = track("spielberg");
+  const program = example("mlp");
+  const one = runOfficialLaps(R, t, program);
+  const two = runOfficialLaps(SOLO_2, t, program);
+  const again = runOfficialLaps(R, t, program);
+  assert.deepEqual(
+    again.laps.map((l) => l.hash),
+    one.laps.map((l) => l.hash),
+  );
+  assert.notDeepEqual(
+    two.laps.map((l) => l.hash),
+    one.laps.map((l) => l.hash),
+  );
 });

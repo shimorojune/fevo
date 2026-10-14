@@ -82,3 +82,33 @@ test("setup validation explains problems", () => {
   assert.match(validateSetup(SOLO_1_SETUP, { gears: 7 })[0]!, /Unknown setup "gears"/);
   assert.deepEqual(completeSetup(SOLO_1_SETUP, { wing: 0.5 }), [0.5, 0.45, 0, 0.58]);
 });
+
+import { ALL_RULES, rulesById } from "./index.ts";
+import { SOLO_2 } from "./solo2.ts";
+import { DEFAULT_TYRES, rearSlideArgs } from "./tyres.ts";
+
+test("solo-2 is solo-1 plus power oversteer, and solo-1 has no tyres block", () => {
+  const { id, simVersion, tyres, ...rest } = SOLO_2;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, ...r }) => r)(SOLO_1));
+  assert.equal(id, "solo-2");
+  assert.equal(simVersion, "1.1.0");
+  assert.deepEqual(tyres, { rearSlide: "combined-sticky", rearSlideExit: 0.88 });
+  assert.ok(!("tyres" in SOLO_1));
+});
+
+test("tyres map to the simulator's rear slide model codes", () => {
+  assert.deepEqual(rearSlideArgs(), [0, 1]);
+  assert.deepEqual(rearSlideArgs(DEFAULT_TYRES), [0, 1]);
+  assert.deepEqual(rearSlideArgs(SOLO_2.tyres), [1, 0.88]);
+  assert.throws(() => rearSlideArgs({ rearSlide: "combined-sticky", rearSlideExit: 0 }));
+  assert.throws(() => rearSlideArgs({ rearSlide: "wet" as never, rearSlideExit: 0.9 }));
+});
+
+test("rules versions are listed once, oldest first, and found by id", () => {
+  assert.deepEqual(
+    ALL_RULES.map((r) => r.id),
+    ["solo-1", "solo-2"],
+  );
+  assert.equal(rulesById("solo-2"), SOLO_2);
+  assert.throws(() => rulesById("solo-3"), /unknown rules/);
+});

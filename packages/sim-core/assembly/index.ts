@@ -8,8 +8,11 @@ import * as agent from "./agent";
 import * as track from "./track";
 import * as car from "./vehicle";
 
-/** 1.0.0 encoded as major * 10000 + minor * 100 + patch. */
-export const SIM_VERSION: i32 = 10000;
+/**
+ * 1.1.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 adds the
+ * combined-sticky rear tyre model for solo-2; solo-1 laps are unchanged.
+ */
+export const SIM_VERSION: i32 = 10100;
 
 export const STATUS_RUNNING: i32 = 0;
 export const STATUS_FINISHED: i32 = 1;
@@ -61,6 +64,13 @@ const obs = new StaticArray<f64>(MAX_RAYS + 4);
 export function setCarParams(values: Float64Array): void {
   assert(values.length == PARAM_COUNT, "wrong car param count");
   for (let i = 0; i < PARAM_COUNT; i++) unchecked((params[i] = values[i]));
+}
+
+/** Rear tyre model under power (see setRearSlideModel in vehicle.ts): 0 drive-only (solo-1), 1 combined-sticky. */
+export function setRearSlideModel(model: i32, exit: f64): void {
+  assert(model == car.REAR_SLIDE_DRIVE_ONLY || model == car.REAR_SLIDE_COMBINED_STICKY, "unknown rear slide model");
+  assert(exit > 0 && exit <= 1, "rear slide exit must be in (0, 1]");
+  car.setRearSlideModel(model, exit);
 }
 
 export function setTiming(agentHz: i32, physicsSubsteps: i32): void {
@@ -395,6 +405,8 @@ export function stateHash(): u64 {
   h = mix(h, <u64>status);
   h = mix(h, <u64>progressIdx);
   h = mix(h, <u64>nextGate);
+  // Only models with a carried slide state hash it, so drive-only (solo-1) hashes are unchanged.
+  if (car.rearSliding) h = mix(h, 1);
   return h;
 }
 
