@@ -117,6 +117,10 @@ function spinningRear(power: f64, f: f64, vxw: f64, vsy: f64): void {
 export let frontSlide: f64 = 0;
 /** Longitudinal acceleration from the last substep, for load transfer. */
 let axPrev: f64 = 0;
+/** Longitudinal acceleration in the last substep (m/s², forward positive). */
+export function longAccel(): f64 {
+  return axPrev;
+}
 export let rearSlide: f64 = 0;
 
 export let x: f64 = 0;

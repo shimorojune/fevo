@@ -232,3 +232,51 @@ test("the simulator rejects unknown track limits", () => {
   assert.throws(() => sim.setTrackLimits(2));
   sim.setTrackLimits(sim.LIMITS_ALL_CORNERS.value);
 });
+
+test("the standard observation set is the rules' 15 numbers; the extended set adds 13 after them", () => {
+  const t = loadTrackFile("spielberg");
+  load(t);
+  const run = (set: number) => {
+    sim.setObservationSet(set);
+    try {
+      startSeed(1);
+      for (let i = 0; i < 300; i++) sim.step(0.05 * Math.sin(i / 20), i < 200 ? 0.6 : -0.3);
+      return Array.from({ length: sim.getObservationCount() }, (_, i) => sim.getObservation(i));
+    } finally {
+      sim.setObservationSet(sim.OBS_STANDARD.value);
+    }
+  };
+  const std = run(sim.OBS_STANDARD.value);
+  const ext = run(sim.OBS_EXTENDED.value);
+  assert.equal(std.length, RAYS + 4);
+  assert.equal(ext.length, RAYS + 4 + sim.EXTRA_OBS.value);
+  assert.deepEqual(ext.slice(0, RAYS + 4), std, "the standard numbers don't depend on the set");
+  for (const v of ext) assert.ok(Number.isFinite(v) && v >= -1 && v <= 1);
+  assert.throws(() => sim.getObservation(RAYS + 4));
+});
+
+test("extended observation at the start: inside both edges, no slides, progress near zero, a corner ahead", () => {
+  const t = loadTrackFile("spielberg");
+  load(t);
+  sim.setObservationSet(sim.OBS_EXTENDED.value);
+  try {
+    startSeed(1);
+    sim.step(0, 0);
+    const b = RAYS + 4, o = (k: number) => sim.getObservation(b + k);
+    assert.ok(o(6) > 0 && o(7) > 0, `margins ${o(6)} ${o(7)}`);
+    assert.equal(o(3), 0);
+    assert.equal(o(4), 0);
+    assert.ok(o(12) >= 0 && o(12) < 0.01);
+    // The start straight is ~430 m long: nothing ahead within 200 m here. From 260 m, T1 (a tight right-hander
+    // at about 430-470 m) is 200 m ahead, and right turns read positive.
+    assert.ok([8, 9, 10, 11].every((k) => Math.abs(o(k)) < 0.05), "straight ahead of the start line");
+    sim.resetAtPoint(260, 0, 0, 30);
+    sim.step(0, 0);
+    assert.ok(o(11) > 0.5, `T1 200 m ahead: ${[8, 9, 10, 11].map((k) => o(k).toFixed(2))}`);
+    assert.ok([8, 9].every((k) => Math.abs(o(k)) < 0.05), "still straight 50-100 m ahead");
+  } finally {
+    sim.setObservationSet(sim.OBS_STANDARD.value);
+  }
+  assert.throws(() => sim.setObservationSet(2));
+  sim.setObservationSet(sim.OBS_STANDARD.value);
+});
