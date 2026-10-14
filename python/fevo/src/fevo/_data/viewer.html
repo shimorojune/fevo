@@ -200,7 +200,7 @@ function drawMain() {
   for (let i = from; i <= Math.floor(frame); i++) i === from ? ctx.moveTo(lap.x[i], lap.y[i]) : ctx.lineTo(lap.x[i], lap.y[i]);
   ctx.lineTo(x, y); ctx.strokeStyle = css("--trail"); ctx.lineWidth = 0.35; ctx.stroke();
   // Skid marks: every sliding wheel over the last 20 seconds leaves a dark streak.
-  const fi = Math.floor(f);
+  const fi = Math.floor(frame);
   for (let i = Math.max(1, fi - 20 * HZ); i <= fi; i++) {
     const kf = slideAt(lap.frontSlide, i), kr = slideAt(lap.rearSlide, i);
     if (kf <= 0 && kr <= 0) continue;
