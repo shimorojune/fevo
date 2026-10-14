@@ -415,6 +415,19 @@ const LOOK_AHEAD_M: StaticArray<i32> = [25, 50, 100, 150, 200, 300, 400];
 const CORNER_RADIUS_M: f64 = 300;
 /** How far ahead the next corner is looked for. */
 const CORNER_SEARCH_M: i32 = 600;
+/** Curvature inputs are scaled so a radius of this many metres (a tight hairpin) reads 1. */
+const CURVATURE_SCALE_M: f64 = 15.0;
+
+/**
+ * A curvature as an input, positive for a right turn: sign × √(15 m × |curvature|), at most 1.
+ * Compressive, so tight and fast corners both keep resolution: a 15 m radius reads 1, 50 m 0.55,
+ * 300 m 0.22, a straight 0. (A linear scale either saturated every hairpin and chicane at 1, or
+ * squashed fast sweepers towards 0.)
+ */
+function curvatureInput(k: f64): f64 {
+  const v = Math.sqrt(Math.abs(k) * CURVATURE_SCALE_M);
+  return k > 0 ? -Math.min(v, 1.0) : Math.min(v, 1.0);
+}
 
 /** Signed centre-line curvature at point i (1/m, left positive): heading change over ±10 m. */
 function curvatureAt(i: i32): f64 {
@@ -430,9 +443,9 @@ function curvatureAt(i: i32): f64 {
  *   5 longitudinal acceleration / 50 m/s² (forward positive)
  *   6 left margin, 7 right margin: metres from the tyre nearest each edge to it
  *     (the tyre points of the one-tyre limit), / 10; negative once over the line
- *   8..14 centre-line curvature 25, 50, 100, 150, 200, 300, 400 m ahead, × 50 m (a 50 m radius reads 1)
+ *   8..14 centre-line curvature 25, 50, 100, 150, 200, 300, 400 m ahead, as curvatureInput()
  *   15 distance to the next corner (radius under 300 m) / 600 m; 1 when none within 600 m
- *   16 that corner's sharpness: the strongest curvature in its first 150 m, × 50 m
+ *   16 that corner's sharpness: the strongest curvature in its first 150 m, as curvatureInput()
  *   17 lap progress along the centre line (0..1, every metre, not every gate)
  * The look-ahead reaches braking zones: at 340 km/h braking starts ~250 m before a corner.
  */
@@ -464,7 +477,7 @@ function observeExtended(b: i32): void {
   unchecked((obs[b + 7] = clamp(right / 10.0, -1, 1)));
   const n = track.n;
   for (let k = 0; k < LOOK_AHEAD_M.length; k++) {
-    unchecked((obs[b + 8 + k] = clamp(-curvatureAt((progressIdx + unchecked(LOOK_AHEAD_M[k])) % n) * 50.0, -1, 1)));
+    unchecked((obs[b + 8 + k] = curvatureInput(curvatureAt((progressIdx + unchecked(LOOK_AHEAD_M[k])) % n))));
   }
   let dist = CORNER_SEARCH_M;
   for (let d = 0; d <= CORNER_SEARCH_M; d += 5) {
@@ -481,7 +494,7 @@ function observeExtended(b: i32): void {
     }
   }
   unchecked((obs[b + 15] = <f64>dist / <f64>CORNER_SEARCH_M));
-  unchecked((obs[b + 16] = clamp(-sharp * 50.0, -1, 1)));
+  unchecked((obs[b + 16] = curvatureInput(sharp)));
   unchecked((obs[b + 17] = <f64>progressIdx / <f64>n));
 }
 

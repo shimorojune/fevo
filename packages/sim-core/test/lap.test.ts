@@ -270,17 +270,42 @@ test("extended observation at the start: inside both edges, no slides, progress 
     // T1 is a tight right-hander about 430-470 m from the start line, and right turns read positive. From the
     // start: straight up to 200 m, the corner at the 400 m sample (that's how braking zones get seen in time),
     // and the next corner ~400 m away.
-    assert.ok([8, 9, 10, 11, 12].every((k) => Math.abs(o(k)) < 0.05), "straight within 200 m of the start line");
+    assert.ok([8, 9, 10, 11, 12].every((k) => Math.abs(o(k)) < 0.08), "straight within 200 m of the start line");
     assert.ok(o(15) > 0.6 && o(15) < 0.8, `next corner at ${(o(15) * 600).toFixed(0)} m`);
     assert.ok(o(16) > 0.5, `next corner sharp and to the right: ${o(16).toFixed(2)}`);
     sim.resetAtPoint(260, 0, 0, 30);
     sim.step(0, 0);
     assert.ok(o(12) > 0.5, `T1 200 m ahead: ${[8, 9, 10, 11, 12, 13, 14].map((k) => o(k).toFixed(2))}`);
-    assert.ok([8, 9].every((k) => Math.abs(o(k)) < 0.05), "still straight 25-50 m ahead");
+    assert.ok([8, 9].every((k) => Math.abs(o(k)) < 0.08), "still straight 25-50 m ahead");
     assert.ok(o(15) > 0.2 && o(15) < 0.35, `next corner at ${(o(15) * 600).toFixed(0)} m`);
   } finally {
     sim.setObservationSet(sim.OBS_STANDARD.value);
   }
   assert.throws(() => sim.setObservationSet(2));
   sim.setObservationSet(sim.OBS_STANDARD.value);
+});
+
+test("curvature inputs are compressive: a 15 m radius reads 1, 50 m about 0.55, 300 m about 0.22, right turns positive", () => {
+  // Circular test track: a ring of the given radius, driven clockwise (right turns), centre-line points 1 m apart.
+  const ring = (radius: number) => {
+    const n = Math.round(2 * Math.PI * radius);
+    const c: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = -(2 * Math.PI * i) / n;
+      c.push(radius * Math.cos(a), radius * Math.sin(a));
+    }
+    sim.loadTrack(Float64Array.from(c), new Float64Array(n).fill(6), new Float64Array(n).fill(6), Int32Array.from([0, Math.floor(n / 2)]));
+  };
+  sim.setObservationSet(sim.OBS_EXTENDED.value);
+  try {
+    for (const [radius, want] of [[15, 1], [50, Math.sqrt(15 / 50)], [300, Math.sqrt(15 / 300)]] as const) {
+      ring(radius);
+      sim.resetAtPoint(0, 0, 0, 5);
+      sim.step(0, 0);
+      const v = sim.getObservation(RAYS + 4 + 9);
+      assert.ok(Math.abs(v - want) < 0.03, `radius ${radius} m reads ${v.toFixed(3)}, want ${want.toFixed(3)}`);
+    }
+  } finally {
+    sim.setObservationSet(sim.OBS_STANDARD.value);
+  }
 });
