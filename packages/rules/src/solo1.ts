@@ -19,6 +19,7 @@ export const SOLO_1_CAR = {
   widthM: 1.9,
   wheelbaseM: 3.4,
   cgToFrontM: 1.87,
+  cgHeightM: 0.28,
   yawInertiaKgM2: 1100,
   maxSteerRad: 0.38,
   steerRateRadPerS: 2.5,
@@ -75,10 +76,10 @@ export const SOLO_1_SETUP = [
     default: 0,
     help: "Front bar stiffer (+) or rear bar stiffer (−). A stiffer front bar makes the front respond faster but take more of the load transfer, so it grips less at the limit (understeer); a stiffer rear does the opposite (oversteer). Matters most in slow corners.",
     effects: [
-      { param: "pacejkaBFront", perUnit: 1.5 },
-      { param: "pacejkaBRear", perUnit: -1.5 },
-      { param: "tyreMuFront", perUnit: -0.06 },
-      { param: "tyreMuRear", perUnit: 0.06 },
+      { param: "pacejkaBFront", perUnit: 1.0 },
+      { param: "pacejkaBRear", perUnit: -1.0 },
+      { param: "tyreMuFront", perUnit: -0.15 },
+      { param: "tyreMuRear", perUnit: 0.15 },
     ],
   },
   {

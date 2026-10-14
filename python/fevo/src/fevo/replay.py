@@ -36,6 +36,7 @@ def write_replay(agents: list[tuple[str, Program]], out: str | Path, tracks: lis
                 "medianSteps": official.median_steps,
                 "x": rnd(t["x"], 100), "y": rnd(t["y"], 100), "yaw": rnd(t["yaw"], 10000), "speed": rnd(t["speed"], 100),
                 "steer": rnd(t["steer"], 1000), "throttle": rnd(t["throttle"], 1000), "gates": t["gates"],
+                "frontSlide": rnd(t["frontSlide"], 100), "rearSlide": rnd(t["rearSlide"], 100),
             })  # fmt: skip
     data = {
         "rules": {"id": r.id, "agentHz": r.agent_hz, "car": {"length": r.car["lengthM"], "width": r.car["widthM"]}},

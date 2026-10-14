@@ -142,12 +142,13 @@ class Simulator:
         return STATUS[self.core.call("step", float(steer), float(throttle))]
 
     def step_fast(self, steer: float, throttle: float) -> tuple[int, tuple[float, ...]]:
-        """One step for training loops: (status code, observation + vx, vy, yaw rate, progress index, gates, steps).
+        """One step for training loops: (status code, observation + vx, vy, yaw rate, progress index, gates, steps,
+        front slide, rear slide).
 
         Status codes index fevo.sim.STATUS. One wasm call and one memory read per step.
         """
         code = self.core.call("stepToScratch", float(steer), float(throttle))
-        n = len(self.rules.observation) + 6
+        n = len(self.rules.observation) + 8
         raw = self.core.memory.read(self.core.store, self.core.f64_ptr, self.core.f64_ptr + 8 * n)
         return code, struct.unpack(f"<{n}d", bytes(raw))
 
@@ -202,7 +203,7 @@ class Simulator:
         tr: dict[str, list[float]] | None = None
         if trace:
             c = self.core.call
-            tr = {k: [] for k in ("x", "y", "yaw", "speed", "steer", "throttle", "gates")}
+            tr = {k: [] for k in ("x", "y", "yaw", "speed", "steer", "throttle", "gates", "frontSlide", "rearSlide")}
 
             def record() -> None:
                 tr["x"].append(c("getX"))
@@ -212,6 +213,8 @@ class Simulator:
                 tr["steer"].append(c("getAgentSteer"))
                 tr["throttle"].append(c("getAgentThrottle"))
                 tr["gates"].append(c("getGatesPassed"))
+                tr["frontSlide"].append(c("getFrontSlide"))
+                tr["rearSlide"].append(c("getRearSlide"))
 
             record()
             status = "running"

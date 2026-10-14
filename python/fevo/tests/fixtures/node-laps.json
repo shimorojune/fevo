@@ -69,26 +69,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 8423,
+     "steps": 8418,
      "gatesPassed": 107,
-     "hash": "473fa67af1f7e4f8"
+     "hash": "11210eaa38d923d8"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 8423,
+     "steps": 8418,
      "gatesPassed": 107,
-     "hash": "2c074bde3c3291bc"
+     "hash": "422f94b8f0eccb9b"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 8423,
+     "steps": 8418,
      "gatesPassed": 107,
-     "hash": "473fa67af1f7e4f8"
+     "hash": "11210eaa38d923d8"
     }
    ],
-   "medianSteps": 8423
+   "medianSteps": 8418
   },
   {
    "agent": "example-genome",
@@ -159,26 +159,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 10255,
+     "steps": 10250,
      "gatesPassed": 144,
-     "hash": "2e3d121e86b58ec3"
+     "hash": "20db10e0e72f7e47"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 10255,
+     "steps": 10250,
      "gatesPassed": 144,
-     "hash": "2e3d121e86b58ec3"
+     "hash": "20db10e0e72f7e47"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 10255,
+     "steps": 10250,
      "gatesPassed": 144,
-     "hash": "2e3d121e86b58ec3"
+     "hash": "c1a17f3896134e14"
     }
    ],
-   "medianSteps": 10255
+   "medianSteps": 10250
   },
   {
    "agent": "example-genome",
@@ -249,26 +249,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 11335,
+     "steps": 11322,
      "gatesPassed": 137,
-     "hash": "b8aabac37e787331"
+     "hash": "ca512411f0b6c194"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 11333,
+     "steps": 11322,
      "gatesPassed": 137,
-     "hash": "774c0ae78b412b26"
+     "hash": "a2af775f1f8fc878"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 11335,
+     "steps": 11322,
      "gatesPassed": 137,
-     "hash": "b8aabac37e787331"
+     "hash": "ca512411f0b6c194"
     }
    ],
-   "medianSteps": 11335
+   "medianSteps": 11322
   },
   {
    "agent": "example-mlp",
@@ -487,26 +487,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 8028,
+     "steps": 8024,
      "gatesPassed": 107,
-     "hash": "5adc291f93538b03"
+     "hash": "27ba19bf38935aa7"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 8028,
+     "steps": 8024,
      "gatesPassed": 107,
-     "hash": "f88d5549c8aa024f"
+     "hash": "4dfd53bf729b7cfa"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 8028,
+     "steps": 8024,
      "gatesPassed": 107,
-     "hash": "5adc291f93538b03"
+     "hash": "215a1281445951da"
     }
    ],
-   "medianSteps": 8028
+   "medianSteps": 8024
   },
   {
    "agent": "example-mlp",
@@ -725,26 +725,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 9907,
+     "steps": 9901,
      "gatesPassed": 144,
-     "hash": "8337a3daf8e9cf3a"
+     "hash": "5eb2650551618388"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 9907,
+     "steps": 9901,
      "gatesPassed": 144,
-     "hash": "b2e262333667dc0a"
+     "hash": "76bf7279fef7f374"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 9907,
+     "steps": 9901,
      "gatesPassed": 144,
-     "hash": "8337a3daf8e9cf3a"
+     "hash": "58b423847332b4c4"
     }
    ],
-   "medianSteps": 9907
+   "medianSteps": 9901
   },
   {
    "agent": "example-mlp",
@@ -963,26 +963,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 10778,
+     "steps": 10784,
      "gatesPassed": 137,
-     "hash": "d34690424b20a59c"
+     "hash": "4f4a27563f2797a7"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 10777,
+     "steps": 10784,
      "gatesPassed": 137,
-     "hash": "acafdac0d090e2b3"
+     "hash": "4f4a27563f2797a7"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 10778,
+     "steps": 10784,
      "gatesPassed": 137,
-     "hash": "d34690424b20a59c"
+     "hash": "4f4a27563f2797a7"
     }
    ],
-   "medianSteps": 10778
+   "medianSteps": 10784
   },
   {
    "agent": "example-mlp+setup",
@@ -1201,26 +1201,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 8046,
+     "steps": 8051,
      "gatesPassed": 107,
-     "hash": "aea3c1137abd0d29"
+     "hash": "de9671340f33a354"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 8046,
+     "steps": 8051,
      "gatesPassed": 107,
-     "hash": "557e02a6c7d8daee"
+     "hash": "8b1c7ba82b3a6207"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 8046,
+     "steps": 8051,
      "gatesPassed": 107,
-     "hash": "b75f97d524949be5"
+     "hash": "67563173026bdd11"
     }
    ],
-   "medianSteps": 8046
+   "medianSteps": 8051
   },
   {
    "agent": "example-mlp+setup",
@@ -1439,26 +1439,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 9916,
+     "steps": 9920,
      "gatesPassed": 144,
-     "hash": "4829882f09a556ea"
+     "hash": "3edd7467178228f8"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 9916,
+     "steps": 9920,
      "gatesPassed": 144,
-     "hash": "b960496e0ac0891b"
+     "hash": "1a7b9767bdba69be"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 9916,
+     "steps": 9920,
      "gatesPassed": 144,
-     "hash": "c00fb5be05990130"
+     "hash": "4a076a20a7ed9f26"
     }
    ],
-   "medianSteps": 9916
+   "medianSteps": 9920
   },
   {
    "agent": "example-mlp+setup",
@@ -1677,26 +1677,26 @@
     {
      "seed": 0,
      "status": "finished",
-     "steps": 10804,
+     "steps": 10834,
      "gatesPassed": 137,
-     "hash": "064cc316e9105504"
+     "hash": "3cd59c6d0e9b226e"
     },
     {
      "seed": 1,
      "status": "finished",
-     "steps": 10804,
+     "steps": 10834,
      "gatesPassed": 137,
-     "hash": "064cc316e9105504"
+     "hash": "8ff7f8ebf997161e"
     },
     {
      "seed": 2,
      "status": "finished",
-     "steps": 10804,
+     "steps": 10834,
      "gatesPassed": 137,
-     "hash": "064cc316e9105504"
+     "hash": "8ff7f8ebf997161e"
     }
    ],
-   "medianSteps": 10804
+   "medianSteps": 10834
   }
  ]
 }

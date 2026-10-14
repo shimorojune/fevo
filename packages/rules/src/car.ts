@@ -10,6 +10,8 @@ export interface CarParams {
   wheelbaseM: number;
   /** Centre of gravity to front axle. Rear distance is wheelbase minus this. */
   cgToFrontM: number;
+  /** Centre of gravity height: sets how much load moves forward under braking and back under power. */
+  cgHeightM: number;
   yawInertiaKgM2: number;
   /** Road-wheel steering angle at full lock. */
   maxSteerRad: number;
@@ -61,6 +63,7 @@ export const CAR_PARAM_ORDER = [
   "widthM",
   "wheelbaseM",
   "cgToFrontM",
+  "cgHeightM",
   "yawInertiaKgM2",
   "maxSteerRad",
   "steerRateRadPerS",

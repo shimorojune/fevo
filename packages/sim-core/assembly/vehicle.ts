@@ -12,6 +12,7 @@ import {
   AERO_BALANCE_FRONT,
   AIR_DENSITY,
   BRAKE_BIAS_FRONT,
+  CG_HEIGHT,
   CG_TO_FRONT,
   DOWNFORCE_AREA,
   DRAG_AREA,
@@ -39,6 +40,18 @@ import {
 const MIN_SLIP_SPEED: f64 = 0.5;
 /** Drive force uses at least this speed in P / v, so launch is traction-limited. */
 const MIN_DRIVE_SPEED: f64 = 1.0;
+/** A sliding (locked or spinning) tyre's friction, as a share of its peak grip. */
+const SLIDE_MU: f64 = 0.85;
+/** Share of a sliding tyre's force that can still act sideways. */
+const SLIDE_LATERAL: f64 = 0.25;
+/** Reported slide intensity starts here, so even a light lock-up shows. */
+const SLIDE_MIN: f64 = 0.2;
+
+/** Lock-up or wheelspin intensity on each axle in the last substep, 0 (gripping) to 1. */
+export let frontSlide: f64 = 0;
+/** Longitudinal acceleration from the last substep, for load transfer. */
+let axPrev: f64 = 0;
+export let rearSlide: f64 = 0;
 
 export let x: f64 = 0;
 export let y: f64 = 0;
@@ -55,6 +68,9 @@ export function resetVehicle(px: f64, py: f64, pyaw: f64, pvx: f64): void {
   yaw = wrapAngle(pyaw);
   vx = pvx;
   vy = 0;
+  frontSlide = 0;
+  rearSlide = 0;
+  axPrev = 0;
   r = 0;
   delta = 0;
 }
@@ -81,9 +97,12 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
   const drag = q * p(DRAG_AREA);
   const aeroFront = p(AERO_BALANCE_FRONT);
 
-  // Normal loads: static split plus downforce. No load transfer in solo-1.
-  const fzf = (m * g * b) / L + downforce * aeroFront;
-  const fzr = (m * g * a) / L + downforce * (1.0 - aeroFront);
+  // Normal loads: static split, downforce, and longitudinal load transfer
+  // (braking moves load onto the fronts, accelerating onto the rears), from
+  // the previous substep's acceleration.
+  const transfer = (m * axPrev * p(CG_HEIGHT)) / L;
+  const fzf = Math.max(0.0, (m * g * b) / L + downforce * aeroFront - transfer);
+  const fzr = Math.max(0.0, (m * g * a) / L + downforce * (1.0 - aeroFront) + transfer);
 
   // Longitudinal demand.
   let fxf: f64 = 0;
@@ -106,22 +125,38 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
   let fyf = pacejka(alphaF, muF * fzf, p(PACEJKA_B_FRONT));
   let fyr = pacejka(alphaR, muR * fzr, p(PACEJKA_B_REAR));
 
-  // Friction circle per axle: when the combined demand exceeds the grip
-  // available, both components shrink by the same factor, so wheelspin or
-  // lock-up costs cornering force without erasing it outright.
+  // Tyre limits per axle. Asking for more braking or drive than the tyre can
+  // give locks or spins the wheels: the tyre slides, at lower friction and
+  // with almost no cornering force (locked fronts go straight on, spinning
+  // rears step out). Within the limit, the friction circle shares grip
+  // between braking/drive and cornering.
   const capF = muF * fzf;
   const capR = muR * fzr;
-  const demandF = Math.sqrt(fxf * fxf + fyf * fyf);
-  const demandR = Math.sqrt(fxr * fxr + fyr * fyr);
-  if (demandF > capF) {
-    const k = capF / demandF;
-    fxf *= k;
-    fyf *= k;
+  frontSlide = 0;
+  rearSlide = 0;
+  if (Math.abs(fxf) > capF) {
+    frontSlide = Math.min(1.0, Math.abs(fxf) / capF - 1.0 + SLIDE_MIN);
+    fxf = Math.sign(fxf) * SLIDE_MU * capF;
+    fyf = clamp(fyf, -SLIDE_LATERAL * SLIDE_MU * capF, SLIDE_LATERAL * SLIDE_MU * capF);
+  } else {
+    const demandF = Math.sqrt(fxf * fxf + fyf * fyf);
+    if (demandF > capF) {
+      const k = capF / demandF;
+      fxf *= k;
+      fyf *= k;
+    }
   }
-  if (demandR > capR) {
-    const k = capR / demandR;
-    fxr *= k;
-    fyr *= k;
+  if (Math.abs(fxr) > capR) {
+    rearSlide = Math.min(1.0, Math.abs(fxr) / capR - 1.0 + SLIDE_MIN);
+    fxr = Math.sign(fxr) * SLIDE_MU * capR;
+    fyr = clamp(fyr, -SLIDE_LATERAL * SLIDE_MU * capR, SLIDE_LATERAL * SLIDE_MU * capR);
+  } else {
+    const demandR = Math.sqrt(fxr * fxr + fyr * fyr);
+    if (demandR > capR) {
+      const k = capR / demandR;
+      fxr *= k;
+      fyr *= k;
+    }
   }
 
   const rolling = vx > 0 ? p(ROLLING_RESISTANCE) * m * g : 0.0;
@@ -129,6 +164,7 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
   const sd = Math.sin(delta);
 
   const ax = (fxr + fxf * cd - fyf * sd - drag - rolling) / m + vy * r;
+  axPrev = (fxr + fxf * cd - fyf * sd - drag - rolling) / m;
   const ay = (fyr + fyf * cd + fxf * sd) / m - vx * r;
   const yawAcc = (a * (fyf * cd + fxf * sd) - b * fyr) / p(YAW_INERTIA);
 

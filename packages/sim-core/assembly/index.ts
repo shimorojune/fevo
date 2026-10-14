@@ -42,6 +42,10 @@ let speedNorm: f64 = 100.0;
  */
 let speedLimit: f64 = Infinity;
 
+/** Strongest lock-up / wheelspin in the last agent step, per axle (0–1). */
+let stepFrontSlide: f64 = 0;
+let stepRearSlide: f64 = 0;
+
 let steps: i32 = 0;
 let status: i32 = STATUS_RUNNING;
 let slowSteps: i32 = 0;
@@ -154,6 +158,8 @@ export function loadAgentFromScratch(slotCount: i32, ioLen: i32, nodeCount: i32,
 /** Free placement without a track, for vehicle tests. */
 export function reset(x: f64, y: f64, yaw: f64, speed: f64): void {
   car.resetVehicle(x, y, yaw, speed);
+  stepFrontSlide = 0;
+  stepRearSlide = 0;
   steps = 0;
   status = STATUS_RUNNING;
   slowSteps = 0;
@@ -199,8 +205,12 @@ export function step(steer: f64, throttle: f64): i32 {
   }
   const s = steer < -1 ? -1.0 : steer > 1 ? 1.0 : steer;
   const t = throttle < -1 ? -1.0 : throttle > 1 ? 1.0 : throttle;
+  stepFrontSlide = 0;
+  stepRearSlide = 0;
   for (let k = 0; k < substeps; k++) {
     car.substep(-s, t > 0 && car.vx >= speedLimit ? 0.0 : t, dt);
+    stepFrontSlide = Math.max(stepFrontSlide, car.frontSlide);
+    stepRearSlide = Math.max(stepRearSlide, car.rearSlide);
     if (track.loaded) {
       updateProgress();
       if (status != STATUS_RUNNING) break;
@@ -246,8 +256,8 @@ const probe = new StaticArray<f64>(MAX_RAYS + 4);
 /**
  * Fast path for step-by-step training hosts: one call per step. Steps, then
  * writes into the F64 scratch buffer: the observation (rayCount + 4 values),
- * then forward speed, lateral speed, yaw rate, progress index, gates passed
- * and steps. Returns the status.
+ * then forward speed, lateral speed, yaw rate, progress index, gates passed,
+ * steps, front slide and rear slide. Returns the status.
  */
 export function stepToScratch(steer: f64, throttle: f64): i32 {
   const st = step(steer, throttle);
@@ -259,6 +269,8 @@ export function stepToScratch(steer: f64, throttle: f64): i32 {
   unchecked((scratchF[k + 3] = <f64>progressIdx));
   unchecked((scratchF[k + 4] = <f64>(nextGate - 1)));
   unchecked((scratchF[k + 5] = <f64>steps));
+  unchecked((scratchF[k + 6] = stepFrontSlide));
+  unchecked((scratchF[k + 7] = stepRearSlide));
   return st;
 }
 
@@ -356,6 +368,14 @@ export function getVy(): f64 {
 }
 export function getYawRate(): f64 {
   return car.r;
+}
+/** Front-axle lock-up in the last step, 0 (gripping) to 1. */
+export function getFrontSlide(): f64 {
+  return stepFrontSlide;
+}
+/** Rear-axle lock-up (braking) or wheelspin (throttle) in the last step, 0 to 1. */
+export function getRearSlide(): f64 {
+  return stepRearSlide;
 }
 export function getSteerAngle(): f64 {
   return car.delta;

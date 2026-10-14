@@ -22,6 +22,7 @@ test("param slots match CAR_PARAM_ORDER", () => {
     widthM: "WIDTH",
     wheelbaseM: "WHEELBASE",
     cgToFrontM: "CG_TO_FRONT",
+    cgHeightM: "CG_HEIGHT",
     yawInertiaKgM2: "YAW_INERTIA",
     maxSteerRad: "MAX_STEER",
     steerRateRadPerS: "STEER_RATE",
@@ -99,4 +100,36 @@ test("non-finite inputs end the lap with an error", () => {
   sim.reset(0, 0, 0, 10);
   assert.equal(sim.step(Number.NaN, 0), sim.STATUS_ERROR.value);
   assert.equal(sim.step(0, Number.POSITIVE_INFINITY), sim.STATUS_ERROR.value);
+});
+
+test("full brakes at 100 km/h lock the fronts and lose the steering; threshold braking keeps it", () => {
+  const stop = (pedal: number, steer = 0) => {
+    sim.reset(0, 0, 0, 100 / 3.6);
+    let locked = 0;
+    let turned = 0;
+    while (sim.getVx() > 1) {
+      sim.step(steer, -pedal);
+      locked = Math.max(locked, sim.getFrontSlide());
+      turned = Math.max(turned, Math.abs(sim.getYaw()));
+    }
+    return { d: sim.getX(), locked, turned };
+  };
+  // The hardest pedal that doesn't lock anything.
+  let best = 0;
+  for (let p = 0.05; p <= 1.0001; p += 0.01) if (stop(p).locked === 0) best = p;
+  const full = stop(1);
+  const threshold = stop(best);
+  assert.ok(full.locked > 0 && best > 0.1 && best < 0.9, `threshold pedal ${best.toFixed(2)}`);
+  assert.ok(full.d > threshold.d * 0.95, `locked ${full.d.toFixed(1)} m vs threshold ${threshold.d.toFixed(1)} m`);
+  assert.ok(stop(1, 1).turned < 0.5 * stop(best, 1).turned, "locked fronts barely steer");
+});
+
+test("full throttle from a standstill spins the rears", () => {
+  sim.reset(0, 0, 0, 0);
+  let spin = 0;
+  for (let i = 0; i < 60; i++) {
+    sim.step(0, 1);
+    spin = Math.max(spin, sim.getRearSlide());
+  }
+  assert.ok(spin > 0);
 });

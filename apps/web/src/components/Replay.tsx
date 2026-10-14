@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { LapResult } from "@fevo/sim";
 import type { TrackFile } from "@fevo/tracks";
 import { SOLO_1 as R } from "@fevo/rules";
-import { drawMain, drawMap, drawTelemetry, geometry, sample, type Car, type Colors } from "../lib/replay";
+import { drawMain, drawMap, drawTelemetry, geometry, sample, tyreState, type Car, type Colors } from "../lib/replay";
 import { HZ, STATUS_LABEL, lapTime } from "../lib/format";
 
 interface Props {
@@ -91,6 +91,7 @@ export function Replay({ track, lap, colors, ghost, autoplay = true }: Props) {
   const thr = Math.max(-1, Math.min(1, trace.throttle[i] ?? 0));
   const str = Math.max(-1, Math.min(1, trace.steer[i] ?? 0));
   const done = f >= steps;
+  const tyres = tyreState(trace, Math.min(i, trace.x.length - 1));
 
   return (
     <div className="replay">
@@ -155,6 +156,12 @@ export function Replay({ track, lap, colors, ghost, autoplay = true }: Props) {
               <div className="v sm" style={{ fontFamily: "inherit" }}>
                 {done ? (lap.status === "finished" ? `Finished ${lapTime(steps)}` : STATUS_LABEL[lap.status]) : "Running"}
               </div>
+            </div>
+          </div>
+          <div className="stat">
+            <div className="k">Tyres</div>
+            <div className="v sm" style={{ fontFamily: "inherit", color: tyres.label ? (tyres.front > 0 || tyres.rearColor !== "#ff8a3d" ? "#2f8fd6" : "var(--orange)") : undefined }}>
+              {tyres.label || "Gripping"}
             </div>
           </div>
           <div>

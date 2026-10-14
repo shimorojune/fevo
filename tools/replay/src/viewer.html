@@ -63,6 +63,7 @@
         <div class="stat"><div class="k">Speed</div><div class="v" id="speed">0 km/h</div></div>
         <div class="stat"><div class="k">Gate</div><div class="v" id="gate">0</div></div>
         <div class="stat"><div class="k">Result</div><div class="v" id="result" style="font-size:16px">–</div></div>
+        <div class="stat" style="grid-column: span 2"><div class="k">Tyres</div><div class="v" id="tyres" style="font-size:16px">–</div></div>
       </div>
       <div style="padding:0 12px 12px">
         <div class="k hint">Throttle / brake</div><div class="bar"><i id="thr"></i></div>
@@ -137,10 +138,33 @@ function fit(cv) {
 function sample(arr, f) { const i = Math.floor(f), k = f - i; const a = arr[i], b = arr[Math.min(i + 1, arr.length - 1)]; return a + (b - a) * k; }
 function sampleAngle(arr, f) { const i = Math.floor(f), k = f - i; const a = arr[i]; let b = arr[Math.min(i + 1, arr.length - 1)]; let d = b - a; if (d > Math.PI) d -= 2*Math.PI; if (d < -Math.PI) d += 2*Math.PI; return a + d * k; }
 
-function drawCar(ctx, colors) {
+const LOCK = "#8fd0ff", SPIN = "#ff8a3d";
+const slideAt = (arr, i) => (arr && arr[i]) || 0;
+/** Lock-up (front, or rear under braking) or wheelspin (rear on throttle) at step i. */
+function tyreState(i) {
+  const f = slideAt(lap.frontSlide, i), r = slideAt(lap.rearSlide, i), braking = lap.throttle[i] < 0;
+  return { f, r, rearColor: braking ? LOCK : SPIN, label: f > 0 && r > 0 ? (braking ? "LOCK-UP: ALL FOUR" : "LOCK-UP + WHEELSPIN") : f > 0 ? "FRONT LOCK-UP" : r > 0 ? (braking ? "REAR LOCK-UP" : "WHEELSPIN") : "" };
+}
+/** Wheel centres in car coordinates (metres): front axle at the CG + 1.65, rear at −1.75. */
+const WHEELS = { front: [[1.6, 0.74], [1.6, -0.74]], rear: [[-1.75, 0.74], [-1.75, -0.74]] };
+
+function drawCar(ctx, colors, ts) {
   const Lh = DATA.rules.car.length / 2, Wh = DATA.rules.car.width / 2; // 2.65, 0.95
-  ctx.fillStyle = "#111";
-  for (const [x0, x1] of [[-2.15, -1.35], [1.25, 1.95]]) for (const s of [-1, 1]) ctx.fillRect(x0, s > 0 ? Wh - 0.42 : -Wh, x1 - x0, 0.42);
+  if (ts && (ts.f > 0 || ts.r > 0)) {
+    // Tyre smoke trailing behind sliding wheels.
+    for (const [axle, k, col] of [["front", ts.f, "rgba(235,240,245,"], ["rear", ts.r, "rgba(235,240,245,"]]) {
+      if (k <= 0) continue;
+      for (const [wx, wy] of WHEELS[axle]) for (let j = 1; j <= 4; j++) {
+        ctx.beginPath(); ctx.arc(wx - j * 0.7, wy, 0.35 + 0.25 * j * k, 0, 2 * Math.PI);
+        ctx.fillStyle = col + (0.35 * k / j).toFixed(3) + ")"; ctx.fill();
+      }
+    }
+  }
+  for (const [x0, x1, axle] of [[-2.15, -1.35, "rear"], [1.25, 1.95, "front"]]) for (const s of [-1, 1]) {
+    const k = ts ? (axle === "front" ? ts.f : ts.r) : 0;
+    ctx.fillStyle = k > 0 ? (axle === "front" ? LOCK : ts.rearColor) : "#111";
+    ctx.fillRect(x0, s > 0 ? Wh - 0.42 : -Wh, x1 - x0, 0.42);
+  }
   ctx.fillStyle = colors.secondary;
   ctx.fillRect(-Lh, -0.78, 0.38, 1.56);                     // rear wing
   ctx.fillRect(Lh - 0.32, -Wh + 0.05, 0.32, 2 * Wh - 0.1);    // front wing
@@ -175,7 +199,22 @@ function drawMain() {
   const from = Math.max(0, Math.floor(frame) - 6 * HZ);
   for (let i = from; i <= Math.floor(frame); i++) i === from ? ctx.moveTo(lap.x[i], lap.y[i]) : ctx.lineTo(lap.x[i], lap.y[i]);
   ctx.lineTo(x, y); ctx.strokeStyle = css("--trail"); ctx.lineWidth = 0.35; ctx.stroke();
-  ctx.save(); ctx.translate(x, y); ctx.rotate(yaw); drawCar(ctx, lap.team.colors); ctx.restore();
+  // Skid marks: every sliding wheel over the last 20 seconds leaves a dark streak.
+  const fi = Math.floor(frame);
+  for (let i = Math.max(1, fi - 20 * HZ); i <= fi; i++) {
+    const kf = slideAt(lap.frontSlide, i), kr = slideAt(lap.rearSlide, i);
+    if (kf <= 0 && kr <= 0) continue;
+    for (const [axle, k] of [["front", kf], ["rear", kr]]) {
+      if (k <= 0) continue;
+      ctx.strokeStyle = `rgba(10,10,12,${(0.25 + 0.5 * k).toFixed(2)})`; ctx.lineWidth = 0.3;
+      for (const [wx, wy] of WHEELS[axle]) {
+        const at = (j) => [lap.x[j] + Math.cos(lap.yaw[j]) * wx - Math.sin(lap.yaw[j]) * wy, lap.y[j] + Math.sin(lap.yaw[j]) * wx + Math.cos(lap.yaw[j]) * wy];
+        const [x0, y0] = at(i - 1), [x1, y1] = at(i);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      }
+    }
+  }
+  ctx.save(); ctx.translate(x, y); ctx.rotate(yaw); drawCar(ctx, lap.team.colors, tyreState(fi)); ctx.restore();
   // Scale bar.
   ctx.setTransform(d, 0, 0, d, 0, 0);
   const m = 20, px = m * zoom / d;
@@ -210,11 +249,17 @@ function drawTelemetryBase() {
     ctx.fillStyle = t >= 0 ? css("--throttle") : css("--brake");
     ctx.globalAlpha = 0.25; ctx.fillRect(xp, H - Math.min(1, Math.abs(t)) * H * 0.3, W / n + 1, H);
   }
-  ctx.globalAlpha = 1; ctx.beginPath();
+  ctx.globalAlpha = 1;
+  // Lock-ups (blue) and wheelspin (orange) as ticks along the top.
+  for (let i = 0; i < n; i++) {
+    const ts = tyreState(i); if (!ts.f && !ts.r) continue;
+    ctx.fillStyle = ts.f > 0 ? LOCK : ts.rearColor; ctx.fillRect((i / (n - 1)) * W, 18 * d, Math.max(1, W / n), 8 * d);
+  }
+  ctx.beginPath();
   for (let i = 0; i < n; i++) { const xp = (i / (n - 1)) * W, yp = H - 6 * d - (lap.speed[i] / vmax) * (H - 18 * d); i ? ctx.lineTo(xp, yp) : ctx.moveTo(xp, yp); }
   ctx.strokeStyle = css("--speed"); ctx.lineWidth = 1.5 * d; ctx.stroke();
   ctx.fillStyle = css("--muted"); ctx.font = `${11 * d}px system-ui`;
-  ctx.fillText(`speed (peak ${Math.round(vmax * 3.6)} km/h), throttle green, brake red`, 8 * d, 14 * d);
+  ctx.fillText(`speed (peak ${Math.round(vmax * 3.6)} km/h), throttle green, brake red; ticks: lock-up blue, wheelspin orange`, 8 * d, 14 * d);
   teleBase = off;
 }
 function drawTelemetry() {
@@ -231,6 +276,9 @@ function hud() {
   $("speed").textContent = `${Math.round(sample(lap.speed, frame) * 3.6)} km/h`;
   $("gate").textContent = `${lap.gates[i]} / ${g.t.gates.length}`;
   $("result").textContent = done ? `${lap.status}${lap.status === "finished" ? " " + fmtTime(lap.steps) : ` at gate ${lap.gatesPassed}`}` : "running";
+  const ts = tyreState(Math.min(i, lap.x.length - 1));
+  $("tyres").textContent = ts.label || "gripping";
+  $("tyres").style.color = ts.label ? (ts.f > 0 ? "#2f8fd6" : ts.rearColor === SPIN ? "#d9622b" : "#2f8fd6") : "";
   const t = Math.max(-1, Math.min(1, lap.throttle[i])), s = Math.max(-1, Math.min(1, lap.steer[i]));
   Object.assign($("thr").style, { left: t >= 0 ? "50%" : `${50 + t * 50}%`, width: `${Math.abs(t) * 50}%`, background: t >= 0 ? css("--throttle") : css("--brake") });
   Object.assign($("str").style, { left: s >= 0 ? "50%" : `${50 + s * 50}%`, width: `${Math.abs(s) * 50}%`, background: css("--steer") });

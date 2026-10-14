@@ -98,7 +98,14 @@ function drive(t: TrackFile, seed: number): { status: number; steps: number; has
     const spare = Math.sqrt(Math.max(0, 1 - latShare * latShare));
     const usable = Math.min(1, (0.8 * spare * R.car.tyreMuRear * rearLoad * Math.max(v, 1)) / R.car.powerW);
     const vt = profile.v[(idx + Math.round((0.3 * v) / t.spacingM)) % n]!;
-    const throttle = Math.max(-1, Math.min(usable, (vt - v) * 0.4));
+    // No ABS either: brake only as hard as the tyres can take before locking up.
+    const loadF = (R.car.massKg * G * (R.car.wheelbaseM - R.car.cgToFrontM)) / R.car.wheelbaseM + q * R.car.downforceAreaM2 * R.car.aeroBalanceFront;
+    const maxBrake = Math.min(
+      (R.car.tyreMuFront * loadF) / R.car.brakeBiasFront,
+      (R.car.tyreMuRear * rearLoad) / (1 - R.car.brakeBiasFront),
+    );
+    const brakeLimit = Math.min(1, (0.9 * maxBrake) / R.car.maxBrakeForceN);
+    const throttle = Math.max(-brakeLimit, Math.min(usable, (vt - v) * 0.4));
     status = sim.step(steer, throttle);
   }
   return { status, steps: sim.getSteps(), hash: sim.stateHash() };

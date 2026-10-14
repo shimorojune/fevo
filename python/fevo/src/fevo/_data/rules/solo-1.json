@@ -7,6 +7,7 @@
   "widthM": 1.9,
   "wheelbaseM": 3.4,
   "cgToFrontM": 1.87,
+  "cgHeightM": 0.28,
   "yawInertiaKgM2": 1100,
   "maxSteerRad": 0.38,
   "steerRateRadPerS": 2.5,
@@ -71,19 +72,19 @@
    "effects": [
     {
      "param": "pacejkaBFront",
-     "perUnit": 1.5
+     "perUnit": 1
     },
     {
      "param": "pacejkaBRear",
-     "perUnit": -1.5
+     "perUnit": -1
     },
     {
      "param": "tyreMuFront",
-     "perUnit": -0.06
+     "perUnit": -0.15
     },
     {
      "param": "tyreMuRear",
-     "perUnit": 0.06
+     "perUnit": 0.15
     }
    ]
   },
@@ -166,6 +167,7 @@
   "widthM",
   "wheelbaseM",
   "cgToFrontM",
+  "cgHeightM",
   "yawInertiaKgM2",
   "maxSteerRad",
   "steerRateRadPerS",
@@ -193,6 +195,7 @@
   1.9,
   3.4,
   1.87,
+  0.28,
   1100,
   0.38,
   2.5,

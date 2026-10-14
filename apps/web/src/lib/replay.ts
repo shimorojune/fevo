@@ -153,16 +153,67 @@ export function fitCanvas(cv: HTMLCanvasElement): number {
   return d;
 }
 
+export const LOCK_COLOR = "#8fd0ff";
+export const SPIN_COLOR = "#ff8a3d";
+
+export interface TyreState {
+  front: number;
+  rear: number;
+  /** Rear sliding under braking is a lock-up; on throttle it's wheelspin. */
+  rearColor: string;
+  label: string;
+}
+
+/** Lock-up / wheelspin at a step of a trace. */
+export function tyreState(trace: LapTrace, i: number): TyreState {
+  const f = trace.frontSlide?.[i] ?? 0;
+  const r = trace.rearSlide?.[i] ?? 0;
+  const braking = (trace.throttle[i] ?? 0) < 0;
+  const label =
+    f > 0 && r > 0 ? (braking ? "Lock-up, all four" : "Lock-up and wheelspin") : f > 0 ? "Front lock-up" : r > 0 ? (braking ? "Rear lock-up" : "Wheelspin") : "";
+  return { front: f, rear: r, rearColor: braking ? LOCK_COLOR : SPIN_COLOR, label };
+}
+
+/** Wheel centres in car coordinates (metres from the centre of gravity). */
+const WHEELS = {
+  front: [
+    [1.6, 0.74],
+    [1.6, -0.74],
+  ],
+  rear: [
+    [-1.75, 0.74],
+    [-1.75, -0.74],
+  ],
+} as const;
+
 /** Top-down F1 car in metres, nose along +x. */
-function drawCar(ctx: CanvasRenderingContext2D, colors: Colors, length: number, width: number, ghost = false): void {
+function drawCar(ctx: CanvasRenderingContext2D, colors: Colors, length: number, width: number, ghost = false, ts?: TyreState): void {
   const Lh = length / 2;
   const Wh = width / 2;
   ctx.globalAlpha = ghost ? 0.45 : 1;
-  ctx.fillStyle = "#111";
-  for (const [x0, x1] of [
-    [-2.15, -1.35],
-    [1.25, 1.95],
+  if (ts && !ghost) {
+    // Tyre smoke trailing behind sliding wheels.
+    for (const [axle, k] of [
+      ["front", ts.front],
+      ["rear", ts.rear],
+    ] as const) {
+      if (k <= 0) continue;
+      for (const [wx, wy] of WHEELS[axle]) {
+        for (let j = 1; j <= 4; j++) {
+          ctx.beginPath();
+          ctx.arc(wx - j * 0.7, wy, 0.35 + 0.25 * j * k, 0, 2 * Math.PI);
+          ctx.fillStyle = `rgba(235,240,245,${((0.35 * k) / j).toFixed(3)})`;
+          ctx.fill();
+        }
+      }
+    }
+  }
+  for (const [x0, x1, axle] of [
+    [-2.15, -1.35, "rear"],
+    [1.25, 1.95, "front"],
   ] as const) {
+    const k = ts ? (axle === "front" ? ts.front : ts.rear) : 0;
+    ctx.fillStyle = k > 0 && ts ? (axle === "front" ? LOCK_COLOR : ts.rearColor) : "#111";
     for (const s of [-1, 1]) ctx.fillRect(x0, s > 0 ? Wh - 0.42 : -Wh, x1 - x0, 0.42);
   }
   ctx.fillStyle = colors.secondary;
@@ -249,12 +300,37 @@ export function drawMain(cv: HTMLCanvasElement, v: MainView): void {
   ctx.lineWidth = 0.35;
   ctx.stroke();
 
+  // Skid marks: every sliding wheel over the last 20 seconds leaves a dark streak.
+  const fi = Math.floor(f);
+  ctx.lineWidth = 0.3;
+  for (let i = Math.max(1, fi - 20 * v.agentHz); i <= fi; i++) {
+    for (const [axle, k] of [
+      ["front", tr.frontSlide?.[i] ?? 0],
+      ["rear", tr.rearSlide?.[i] ?? 0],
+    ] as const) {
+      if (k <= 0) continue;
+      ctx.strokeStyle = `rgba(10,10,12,${(0.25 + 0.5 * k).toFixed(2)})`;
+      for (const [wx, wy] of WHEELS[axle]) {
+        const at = (j: number) => [
+          tr.x[j]! + Math.cos(tr.yaw[j]!) * wx - Math.sin(tr.yaw[j]!) * wy,
+          tr.y[j]! + Math.sin(tr.yaw[j]!) * wx + Math.cos(tr.yaw[j]!) * wy,
+        ];
+        const [x0, y0] = at(i - 1);
+        const [x1, y1] = at(i);
+        ctx.beginPath();
+        ctx.moveTo(x0!, y0!);
+        ctx.lineTo(x1!, y1!);
+        ctx.stroke();
+      }
+    }
+  }
+
   for (const c of [...v.cars].sort((a, b) => Number(b.ghost ?? false) - Number(a.ghost ?? false))) {
     const cf = Math.min(v.frame, c.trace.x.length - 1);
     ctx.save();
     ctx.translate(sample(c.trace.x, cf), sample(c.trace.y, cf));
     ctx.rotate(sampleAngle(c.trace.yaw, cf));
-    drawCar(ctx, c.colors, v.car.length, v.car.width, c.ghost);
+    drawCar(ctx, c.colors, v.car.length, v.car.width, c.ghost, tyreState(c.trace, Math.floor(cf)));
     ctx.restore();
   }
 
@@ -328,6 +404,13 @@ export function drawTelemetry(cv: HTMLCanvasElement, trace: LapTrace, frame: num
     ctx.fillRect(xp, H - hgt, (W / n) * step + 1, hgt);
   }
   ctx.globalAlpha = 1;
+  // Lock-ups (blue) and wheelspin (orange) as ticks along the top.
+  for (let i = 0; i < n; i++) {
+    const ts = tyreState(trace, i);
+    if (!ts.front && !ts.rear) continue;
+    ctx.fillStyle = ts.front > 0 ? LOCK_COLOR : ts.rearColor;
+    ctx.fillRect((i / (n - 1)) * W, 18 * d, Math.max(1, W / n), 6 * d);
+  }
   ctx.beginPath();
   for (let i = 0; i < n; i += step) {
     const xp = (i / (n - 1)) * W;
@@ -339,7 +422,7 @@ export function drawTelemetry(cv: HTMLCanvasElement, trace: LapTrace, frame: num
   ctx.stroke();
   ctx.fillStyle = PALETTE.muted;
   ctx.font = `${11 * d}px Chivo, system-ui, sans-serif`;
-  ctx.fillText(`Speed, peak ${Math.round(vmax * 3.6)} km/h · throttle green · brake red`, 8 * d, 14 * d);
+  ctx.fillText(`Speed, peak ${Math.round(vmax * 3.6)} km/h · throttle green · brake red · ticks: lock-up blue, wheelspin orange`, 8 * d, 14 * d);
   const xp = (Math.min(frame, n - 1) / (n - 1)) * W;
   ctx.fillStyle = PALETTE.fg;
   ctx.fillRect(xp - d, 0, 2 * d, H);

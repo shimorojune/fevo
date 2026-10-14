@@ -33,7 +33,7 @@ const round = (a: Float64Array, k: number) => Array.from(a, (v) => Math.round(v 
 configure(R);
 const laps = [];
 for (const [ai, path] of agentPaths.entries()) {
-  const parsed = parseAgent(readFileSync(path, "utf8"), { inputs: 15, outputs: 2 });
+  const parsed = parseAgent(readFileSync(path, "utf8"), { inputs: 15, outputs: 2, setup: R.setup });
   if (!parsed.ok) {
     console.error(`${basename(path)}: ${parsed.errors.map((e) => e.message).join("; ")}`);
     process.exit(1);
@@ -44,7 +44,7 @@ for (const [ai, path] of agentPaths.entries()) {
     // Replay the median lap (or the middle seed if the agent isn't ranked).
     const finished = official.laps.filter((l) => l.status === "finished").sort((a, b) => a.steps - b.steps);
     const seed = official.ranked ? finished[1]!.seed : 1;
-    configure(R);
+    configure(R, parsed.program.setup);
     loadTrack(t);
     loadAgent(parsed.program);
     const lap = runLap(R, seed, { trace: true });
@@ -66,6 +66,8 @@ for (const [ai, path] of agentPaths.entries()) {
       steer: round(tr.steer, 1000),
       throttle: round(tr.throttle, 1000),
       gates: Array.from(tr.gates),
+      frontSlide: round(tr.frontSlide, 100),
+      rearSlide: round(tr.rearSlide, 100),
     });
     console.log(
       `${basename(path)} @ ${t.circuitId}: ${official.ranked ? formatLapTime(official.medianSteps!, R.timing.agentHz) : "not ranked"} ` +

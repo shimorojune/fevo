@@ -19,6 +19,10 @@ export interface LapTrace {
   steer: Float64Array;
   throttle: Float64Array;
   gates: Int32Array;
+  /** Front lock-up intensity per step, 0 (gripping) to 1. */
+  frontSlide: Float64Array;
+  /** Rear lock-up (when braking) or wheelspin (on throttle) per step, 0 to 1. */
+  rearSlide: Float64Array;
 }
 
 export interface LapResult {
@@ -85,6 +89,8 @@ export function runLap(rules: Rules, seed: number, opts: { trace?: boolean } = {
       steer: new Float64Array(cap),
       throttle: new Float64Array(cap),
       gates: new Int32Array(cap),
+      frontSlide: new Float64Array(cap),
+      rearSlide: new Float64Array(cap),
     };
     const record = (i: number) => {
       t.x[i] = core.getX();
@@ -94,6 +100,8 @@ export function runLap(rules: Rules, seed: number, opts: { trace?: boolean } = {
       t.steer[i] = core.getAgentSteer();
       t.throttle[i] = core.getAgentThrottle();
       t.gates[i] = core.getGatesPassed();
+      t.frontSlide[i] = core.getFrontSlide();
+      t.rearSlide[i] = core.getRearSlide();
     };
     record(0);
     do {
@@ -109,6 +117,8 @@ export function runLap(rules: Rules, seed: number, opts: { trace?: boolean } = {
       steer: t.steer.slice(0, n),
       throttle: t.throttle.slice(0, n),
       gates: t.gates.slice(0, n),
+      frontSlide: t.frontSlide.slice(0, n),
+      rearSlide: t.rearSlide.slice(0, n),
     };
   } else {
     status = core.runAgentLap();
