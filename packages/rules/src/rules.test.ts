@@ -107,7 +107,7 @@ test("tyres map to the simulator's rear slide model codes", () => {
 test("rules versions are listed once, oldest first, and found by id", () => {
   assert.deepEqual(
     ALL_RULES.map((r) => r.id),
-    ["solo-1", "solo-2", "solo-3"],
+    ["solo-1", "solo-2", "solo-3", "solo-4"],
   );
   assert.equal(rulesById("solo-2"), SOLO_2);
   assert.throws(() => rulesById("solo-9"), /unknown rules/);
@@ -126,4 +126,19 @@ test("solo-3 is solo-2 with the one-tyre track limit; earlier versions keep all 
   assert.equal(trackLimitsCode(), 0);
   assert.equal(trackLimitsCode("one-tyre"), 1);
   assert.throws(() => trackLimitsCode("none" as never));
+});
+
+import { SOLO_4 } from "./solo4.ts";
+import { EXTENDED_OBSERVATION, observationSetCode } from "./observation.ts";
+
+test("solo-4 is solo-3 with the extended observation (28 inputs)", () => {
+  const { id, simVersion, observation, ...rest } = SOLO_4;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, observation: _o, ...r }) => r)(SOLO_3));
+  assert.equal(id, "solo-4");
+  assert.equal(simVersion, "1.3.0");
+  assert.deepEqual(observation, [...SOLO_3.observation, ...EXTENDED_OBSERVATION]);
+  assert.equal(observation.length, 28);
+  for (const r of [SOLO_1, SOLO_2, SOLO_3]) assert.equal(observationSetCode(r.observation, r.sensors.rayCount), 0);
+  assert.equal(observationSetCode(SOLO_4.observation, SOLO_4.sensors.rayCount), 1);
+  assert.throws(() => observationSetCode([...SOLO_3.observation, "lap_count"], 11));
 });

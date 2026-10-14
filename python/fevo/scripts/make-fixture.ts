@@ -21,7 +21,12 @@ for (const name of ["example-genome", "example-mlp", "example-mlp+setup"]) {
   const json = JSON.parse(readFileSync(join(root, "examples", `${file}.json`), "utf8"));
   const text = JSON.stringify(name.endsWith("+setup") ? { ...json, setup: SETUP } : json);
   for (const R of ALL_RULES) {
-    const parsed = parseAgent(text, { inputs: 15, outputs: 2, setup: R.setup });
+    // Rules with more inputs (solo-4) run the MLPs widened with zero weights for the extra inputs: they
+    // must lap exactly as the 15-input network does under the same physics (solo-3).
+    const extra = R.observation.length - 15;
+    if (extra && !json.layers) continue;
+    const caseText = extra ? JSON.stringify(widen(JSON.parse(text), extra)) : text;
+    const parsed = parseAgent(caseText, { inputs: R.observation.length, outputs: 2, setup: R.setup });
     if (!parsed.ok) throw new Error(parsed.errors[0]!.message);
     const p = packProgram(parsed.program);
     for (const trackId of ["spielberg", "monza", "austin"]) {
@@ -30,7 +35,7 @@ for (const name of ["example-genome", "example-mlp", "example-mlp+setup"]) {
       cases.push({
         agent: name,
         rules: R.id,
-        text,
+        text: caseText,
         fingerprint: await fingerprint(parsed.program),
         trackId,
         program: {
@@ -47,6 +52,13 @@ for (const name of ["example-genome", "example-mlp", "example-mlp+setup"]) {
     }
   }
 }
+/** An MLP with `extra` more inputs that it ignores (zero weights, appended to each first-layer row). */
+function widen(mlp: { layers: number[]; weights: number[][] }, extra: number) {
+  const nIn = mlp.layers[0]!, nOut = mlp.layers[1]!, w = mlp.weights[0]!;
+  const rows = Array.from({ length: nOut }, (_, j) => [...w.slice(j * nIn, (j + 1) * nIn), ...Array(extra).fill(0)]);
+  return { ...mlp, layers: [nIn + extra, ...mlp.layers.slice(1)], weights: [rows.flat(), ...mlp.weights.slice(1)] };
+}
+
 mkdirSync(join(here, "..", "tests", "fixtures"), { recursive: true });
 writeFileSync(join(here, "..", "tests", "fixtures", "node-laps.json"), JSON.stringify({ cases }, null, 1) + "\n");
 console.log(`wrote ${cases.length} parity cases`);

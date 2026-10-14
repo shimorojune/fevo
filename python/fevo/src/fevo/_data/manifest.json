@@ -3,7 +3,8 @@
  "rules": [
   "solo-1",
   "solo-2",
-  "solo-3"
+  "solo-3",
+  "solo-4"
  ],
  "wasmSha256": "eae9cd0b6d3bc7d542a9e7d785f96d5d548e1fe7b7d9b5453c7ebae2b62cf13f",
  "tracks": {

@@ -168,3 +168,12 @@ def test_solo3_ships_with_the_one_tyre_limit_and_earlier_rules_without():
     assert {k: v for k, v in three.items() if k not in ("id", "simVersion", "trackLimits")} == {
         k: v for k, v in two.items() if k not in ("id", "simVersion")
     }
+
+
+def test_solo4_widened_networks_lap_exactly_like_the_originals_on_solo3():
+    """Zero weights on the 13 extra inputs: the 28-input network is the 15-input one, bit for bit."""
+    four = [c for c in FIXTURE["cases"] if c["rules"] == "solo-4"]
+    assert four, "the fixture has solo-4 cases"
+    for c in four:
+        assert c["laps"] == _case(c["agent"], c["trackId"], "solo-3")["laps"], f"{c['agent']} on {c['trackId']}"
+    assert len(fevo.load_rules("solo-4").observation) == 28 and fevo.load_rules("solo-4").observation_set == 1

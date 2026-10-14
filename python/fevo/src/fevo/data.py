@@ -22,6 +22,10 @@ def manifest() -> dict[str, Any]:
 REAR_SLIDE_MODELS = ["drive-only", "combined-slip"]
 #: Track limits; the index is the simulator's code (packages/rules/src/limits.ts).
 TRACK_LIMITS = ["all-corners", "one-tyre"]
+#: The extended observation's names after the standard ones (packages/rules/src/observation.ts).
+EXTENDED_OBSERVATION = ["yaw_rate", "body_slip", "lateral_velocity", "rear_slide", "front_slide", "long_accel",
+                        "left_margin", "right_margin", "curvature_50", "curvature_100", "curvature_150", "curvature_200",
+                        "progress_m"]
 
 
 @dataclass(frozen=True)
@@ -80,6 +84,17 @@ class Rules:
     def track_limits(self) -> int:
         """The simulator's track-limits code. No `trackLimits` (solo-1, solo-2) means all four corners inside."""
         return TRACK_LIMITS.index(self.raw.get("trackLimits", "all-corners"))
+
+    @property
+    def observation_set(self) -> int:
+        """The simulator's observation-set code: 0 standard (rays, speed, progress, offset, heading), 1 extended."""
+        standard = self.raw["sensors"]["rayCount"] + 4
+        extra = self.observation[standard:]
+        if not extra:
+            return 0
+        if extra == EXTENDED_OBSERVATION:
+            return 1
+        raise ValueError(f"unknown observation set {self.observation}")
 
     def packed_car(self, setup: list[float] | None) -> list[float]:
         car = self.car_for(setup)
