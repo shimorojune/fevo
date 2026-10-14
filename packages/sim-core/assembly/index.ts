@@ -3,16 +3,23 @@
 // Sign convention at this boundary follows the rules: steer -1 is full left,
 // +1 full right. Internally the vehicle model uses counter-clockwise positive.
 
-import { LENGTH, PARAM_COUNT, WIDTH, p, params } from "./params";
+import { CG_TO_FRONT, LENGTH, PARAM_COUNT, WHEELBASE, WIDTH, p, params } from "./params";
 import * as agent from "./agent";
 import * as track from "./track";
 import * as car from "./vehicle";
 
 /**
- * 1.1.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 adds the
- * combined-slip rear tyre model for solo-2; solo-1 laps are unchanged.
+ * 1.2.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 added the
+ * combined-slip rear tyre model for solo-2; 1.2.0 adds the one-tyre track
+ * limit for solo-3. solo-1 and solo-2 laps are unchanged.
  */
-export const SIM_VERSION: i32 = 10100;
+export const SIM_VERSION: i32 = 10200;
+
+/** Track limits: the whole car inside the edges (solo-1, solo-2). */
+export const LIMITS_ALL_CORNERS: i32 = 0;
+/** Track limits: any part of at least one tyre on the track (solo-3, as in F1). */
+export const LIMITS_ONE_TYRE: i32 = 1;
+let trackLimits: i32 = LIMITS_ALL_CORNERS;
 
 export const STATUS_RUNNING: i32 = 0;
 export const STATUS_FINISHED: i32 = 1;
@@ -71,6 +78,24 @@ export function setRearSlideModel(model: i32, mu: f64): void {
   assert(model == car.REAR_SLIDE_DRIVE_ONLY || model == car.REAR_SLIDE_COMBINED, "unknown rear slide model");
   assert(mu > 0 && mu <= 1, "rear sliding friction must be in (0, 1] of peak grip");
   car.setRearSlideModel(model, mu);
+}
+
+/**
+ * How a lap ends off the track (checked every physics substep; past the limit
+ * the lap ends as crashed, whichever rule applies). There is no surface model
+ * beyond the edges: a tyre over the line grips as it would on the track.
+ *
+ * LIMITS_ALL_CORNERS: all four corners of the car's body rectangle (length
+ * by width) must be inside the edges.
+ * LIMITS_ONE_TYRE: legal while any part of at least one tyre is on the track
+ * (the edge line counts as track). Tyres sit at the axles (cgToFront ahead of
+ * the centre, wheelbase - cgToFront behind) with their outer edges at the
+ * car's full width; the part of the tyres nearest the track is always an
+ * outer edge, so tyre width doesn't change the rule.
+ */
+export function setTrackLimits(mode: i32): void {
+  assert(mode == LIMITS_ALL_CORNERS || mode == LIMITS_ONE_TYRE, "unknown track limits");
+  trackLimits = mode;
 }
 
 export function setTiming(agentHz: i32, physicsSubsteps: i32): void {
@@ -312,6 +337,7 @@ function updateProgress(): void {
 }
 
 function offTrack(): bool {
+  if (trackLimits == LIMITS_ONE_TYRE) return allTyresOff();
   const hl = p(LENGTH) * 0.5;
   const hw = p(WIDTH) * 0.5;
   const c = Math.cos(car.yaw);
@@ -325,6 +351,24 @@ function offTrack(): bool {
     if (track.outside(i, px, py)) return true;
   }
   return false;
+}
+
+/** One-tyre limit: off only when the outer edge of every tyre is past the edges. */
+function allTyresOff(): bool {
+  const front = p(CG_TO_FRONT);
+  const rear = front - p(WHEELBASE);
+  const hw = p(WIDTH) * 0.5;
+  const c = Math.cos(car.yaw);
+  const s = Math.sin(car.yaw);
+  for (let k = 0; k < 4; k++) {
+    const fx = k < 2 ? front : rear;
+    const fy = k % 2 == 0 ? hw : -hw;
+    const px = car.x + fx * c - fy * s;
+    const py = car.y + fx * s + fy * c;
+    const i = track.nearestLocal(px, py, progressIdx, CORNER_WINDOW);
+    if (!track.outside(i, px, py)) return false;
+  }
+  return true;
 }
 
 /** Fill the observation in the order the rules define: rays left to right, speed, progress, offset, heading. */

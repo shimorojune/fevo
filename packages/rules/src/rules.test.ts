@@ -107,8 +107,23 @@ test("tyres map to the simulator's rear slide model codes", () => {
 test("rules versions are listed once, oldest first, and found by id", () => {
   assert.deepEqual(
     ALL_RULES.map((r) => r.id),
-    ["solo-1", "solo-2"],
+    ["solo-1", "solo-2", "solo-3"],
   );
   assert.equal(rulesById("solo-2"), SOLO_2);
-  assert.throws(() => rulesById("solo-3"), /unknown rules/);
+  assert.throws(() => rulesById("solo-9"), /unknown rules/);
+});
+
+import { SOLO_3 } from "./solo3.ts";
+import { trackLimitsCode } from "./limits.ts";
+
+test("solo-3 is solo-2 with the one-tyre track limit; earlier versions keep all four corners in", () => {
+  const { id, simVersion, trackLimits, ...rest } = SOLO_3;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, ...r }) => r)(SOLO_2));
+  assert.equal(id, "solo-3");
+  assert.equal(simVersion, "1.2.0");
+  assert.equal(trackLimits, "one-tyre");
+  assert.ok(!("trackLimits" in SOLO_1) && !("trackLimits" in SOLO_2));
+  assert.equal(trackLimitsCode(), 0);
+  assert.equal(trackLimitsCode("one-tyre"), 1);
+  assert.throws(() => trackLimitsCode("none" as never));
 });

@@ -20,6 +20,8 @@ def manifest() -> dict[str, Any]:
 
 #: Rear tyre models under power; the index is the simulator's code (packages/rules/src/tyres.ts).
 REAR_SLIDE_MODELS = ["drive-only", "combined-slip"]
+#: Track limits; the index is the simulator's code (packages/rules/src/limits.ts).
+TRACK_LIMITS = ["all-corners", "one-tyre"]
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,11 @@ class Rules:
         """The simulator's (model, sliding mu) for the rear tyres under power. No `tyres` block (solo-1) is drive-only."""
         t = self.raw.get("tyres") or {"rearSlide": "drive-only", "rearSlideMu": 1.0}
         return REAR_SLIDE_MODELS.index(t["rearSlide"]), float(t["rearSlideMu"])
+
+    @property
+    def track_limits(self) -> int:
+        """The simulator's track-limits code. No `trackLimits` (solo-1, solo-2) means all four corners inside."""
+        return TRACK_LIMITS.index(self.raw.get("trackLimits", "all-corners"))
 
     def packed_car(self, setup: list[float] | None) -> list[float]:
         car = self.car_for(setup)

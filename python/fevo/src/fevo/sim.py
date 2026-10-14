@@ -90,6 +90,7 @@ class Simulator:
         self.core.write_f64(packed)
         self.core.call("setCarParamsFromScratch", len(packed))
         self.core.call("setRearSlideModel", *self.rules.rear_slide)
+        self.core.call("setTrackLimits", self.rules.track_limits)
         self.core.call("setTiming", r["timing"]["agentHz"], r["timing"]["physicsSubsteps"])
         p = practice or Practice()
         self.core.call("setLimits", p.max_steps or r["timing"]["maxSteps"], float(r["timing"]["stopSpeedMps"]), r["timing"]["stopSteps"])

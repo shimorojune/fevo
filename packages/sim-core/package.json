@@ -1,6 +1,6 @@
 {
   "name": "@fevo/sim-core",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "Deterministic simulator core in AssemblyScript. One .wasm runs in browsers, the Node verifier and Python.",

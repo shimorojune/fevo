@@ -4,7 +4,7 @@
  * evaluation run inside @fevo/sim-core's wasm.
  */
 import { packProgram, type Program } from "@fevo/agent-format";
-import { applySetup, packCarParams, rearSlideArgs, type Rules } from "@fevo/rules";
+import { applySetup, packCarParams, rearSlideArgs, trackLimitsCode, type Rules } from "@fevo/rules";
 import * as core from "@fevo/sim-core";
 import type { TrackFile } from "@fevo/tracks";
 
@@ -54,6 +54,7 @@ export function configure(rules: Rules, setup?: readonly number[]): void {
   core.setCarParams(packCarParams(carFor(rules, setup)));
   // Always set: the wasm keeps the model between configures, and solo-1 (no `tyres`) needs drive-only back.
   core.setRearSlideModel(...rearSlideArgs(rules.tyres));
+  core.setTrackLimits(trackLimitsCode(rules.trackLimits));
   core.setTiming(rules.timing.agentHz, rules.timing.physicsSubsteps);
   core.setLimits(rules.timing.maxSteps, rules.timing.stopSpeedMps, rules.timing.stopSteps);
   core.setSensors(rules.sensors.rayCount, rules.sensors.rayLengthM, rules.sensors.rayFovRad, rules.sensors.speedNormMps);

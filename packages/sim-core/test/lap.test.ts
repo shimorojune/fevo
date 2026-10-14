@@ -198,3 +198,37 @@ test("NaN ends the lap with an error and later steps do nothing", () => {
   assert.equal(sim.step(0, 1), sim.STATUS_ERROR.value);
   assert.equal(sim.getSteps(), steps);
 });
+
+/** One step from a point on Spielberg's start straight, `fromLeftEdge` metres inside (+) or past (−) the left edge. */
+function besideLeftEdge(limits: number, fromLeftEdge: number): number {
+  const t = loadTrackFile("spielberg");
+  load(t);
+  const i = 120;
+  sim.setTrackLimits(limits);
+  try {
+    // resetAtPoint takes the offset to the right of the centre line.
+    sim.resetAtPoint(i, -(t.widthLeft[i]! - fromLeftEdge), 0, 20);
+    return sim.step(0, 0);
+  } finally {
+    sim.setTrackLimits(sim.LIMITS_ALL_CORNERS.value);
+  }
+}
+
+test("all-corners limit (solo-1, solo-2): any corner of the body over the edge ends the lap", () => {
+  const hw = R.car.widthM / 2;
+  assert.equal(besideLeftEdge(sim.LIMITS_ALL_CORNERS.value, hw + 0.2), sim.STATUS_RUNNING.value);
+  assert.equal(besideLeftEdge(sim.LIMITS_ALL_CORNERS.value, 0.5), sim.STATUS_CRASHED.value);
+});
+
+test("one-tyre limit (solo-3): legal while any tyre touches the track, off when all four are past the edge", () => {
+  const hw = R.car.widthM / 2;
+  assert.equal(besideLeftEdge(sim.LIMITS_ONE_TYRE.value, 0.5), sim.STATUS_RUNNING.value);
+  // Centre just under a car's half width past the line: the inner tyres' outer edges still touch it.
+  assert.equal(besideLeftEdge(sim.LIMITS_ONE_TYRE.value, -(hw - 0.2)), sim.STATUS_RUNNING.value);
+  assert.equal(besideLeftEdge(sim.LIMITS_ONE_TYRE.value, -(hw + 0.25)), sim.STATUS_CRASHED.value);
+});
+
+test("the simulator rejects unknown track limits", () => {
+  assert.throws(() => sim.setTrackLimits(2));
+  sim.setTrackLimits(sim.LIMITS_ALL_CORNERS.value);
+});
