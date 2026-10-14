@@ -19,7 +19,7 @@ def manifest() -> dict[str, Any]:
 
 
 #: Rear tyre models under power; the index is the simulator's code (packages/rules/src/tyres.ts).
-REAR_SLIDE_MODELS = ["drive-only", "combined-sticky"]
+REAR_SLIDE_MODELS = ["drive-only", "combined-slip"]
 
 
 @dataclass(frozen=True)
@@ -70,9 +70,9 @@ class Rules:
 
     @property
     def rear_slide(self) -> tuple[int, float]:
-        """The simulator's (model, exit) for the rear tyres under power. No `tyres` block (solo-1) is drive-only."""
-        t = self.raw.get("tyres") or {"rearSlide": "drive-only", "rearSlideExit": 1.0}
-        return REAR_SLIDE_MODELS.index(t["rearSlide"]), float(t["rearSlideExit"])
+        """The simulator's (model, sliding mu) for the rear tyres under power. No `tyres` block (solo-1) is drive-only."""
+        t = self.raw.get("tyres") or {"rearSlide": "drive-only", "rearSlideMu": 1.0}
+        return REAR_SLIDE_MODELS.index(t["rearSlide"]), float(t["rearSlideMu"])
 
     def packed_car(self, setup: list[float] | None) -> list[float]:
         car = self.car_for(setup)

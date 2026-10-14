@@ -49,11 +49,11 @@ const SLIDE_MIN: f64 = 0.2;
 
 /** Rear tyre model under power: the rules choose it (solo-1 has no "tyres" block, so 0). */
 export const REAR_SLIDE_DRIVE_ONLY: i32 = 0;
-export const REAR_SLIDE_COMBINED_STICKY: i32 = 1;
+export const REAR_SLIDE_COMBINED: i32 = 1;
 let rearSlideModel: i32 = REAR_SLIDE_DRIVE_ONLY;
-/** Combined-sticky only: a drive slide ends once demand falls below this share of sliding grip. */
-let rearSlideExit: f64 = 0.88;
-/** Combined-sticky only: the rears are sliding under power (kept between substeps). */
+/** Combined only: sliding friction of a spinning rear, as a share of its peak grip. */
+let rearSlideMu: f64 = 0.9;
+/** Combined only: the rears are spinning under power (kept between substeps). */
 export let rearSliding: bool = false;
 
 /**
@@ -63,15 +63,54 @@ export let rearSliding: bool = false;
  * drive force alone is more than their grip, and grip back the moment it isn't.
  * Drive plus cornering over the limit is scaled back along the friction circle.
  *
- * REAR_SLIDE_COMBINED_STICKY (solo-2): with the throttle open, the rears break
- * away as soon as drive plus cornering together (sqrt(Fx² + Fy²)) ask for more
- * than their grip, and keep sliding until the combined demand falls below
- * `exit` × sliding grip, or the throttle is closed: power oversteer you have
- * to catch by lifting, not by easing off a fraction.
+ * REAR_SLIDE_COMBINED (solo-2): with the throttle open, the rears break away
+ * once drive plus cornering together (sqrt(Fx² + Fy²)) ask for more than their
+ * peak grip. A spinning tyre slides: its force is `mu` × peak grip, pointing
+ * against the contact patch's sliding velocity (wheelspin forward, the rear
+ * axle's sideways velocity across), so the more the wheels spin relative to
+ * the sideways slide, the less cornering force is left. Wheelspin comes from
+ * the power balance (see spinningRear). The rears grip again once the demand
+ * falls below sliding friction (static vs kinetic friction) or the throttle
+ * is closed: a small slide is caught by lifting and opposite lock, a big
+ * throttle mid-corner spins the car.
  */
-export function setRearSlideModel(model: i32, exit: f64): void {
+export function setRearSlideModel(model: i32, mu: f64): void {
   rearSlideModel = model;
-  rearSlideExit = exit;
+  rearSlideMu = mu;
+}
+
+/** Power a sliding rear tyre absorbs at wheelspin vsx: Fx times wheel surface speed. */
+function spinPower(f: f64, vxw: f64, vsy: f64, vsx: f64): f64 {
+  return (f * vsx * (vxw + vsx)) / Math.max(Math.sqrt(vsx * vsx + vsy * vsy), 1e-9);
+}
+
+/** Combined-slip results from spinningRear: rear forces and slip ratio. */
+let spinFx: f64 = 0;
+let spinFy: f64 = 0;
+let spinRatio: f64 = 0;
+
+/**
+ * Forces of a rear axle spinning under power. Quasi-static wheel (no wheel
+ * inertia, so nothing to integrate at 240 Hz): the drive power goes into the
+ * sliding tyre, `power = Fx * (vx + vsx)`, with Coulomb friction
+ * `Fx = f * vsx / |vs|` along the sliding velocity vs = (vsx, vsy). The left
+ * side rises with the wheelspin vsx, so there is exactly one root; a fixed
+ * bisection finds it, the same in every engine.
+ */
+function spinningRear(power: f64, f: f64, vxw: f64, vsy: f64): void {
+  let lo: f64 = 0;
+  let hi: f64 = 1;
+  for (let i = 0; i < 64 && spinPower(f, vxw, vsy, hi) < power; i++) hi *= 2;
+  for (let i = 0; i < 48; i++) {
+    const mid = 0.5 * (lo + hi);
+    if (spinPower(f, vxw, vsy, mid) < power) lo = mid;
+    else hi = mid;
+  }
+  const vsx = 0.5 * (lo + hi);
+  const vs = Math.max(Math.sqrt(vsx * vsx + vsy * vsy), 1e-9);
+  spinFx = (f * vsx) / vs;
+  spinFy = (-f * vsy) / vs;
+  spinRatio = vsx / Math.max(vxw, 1.0);
 }
 
 /** Lock-up or wheelspin intensity on each axle in the last substep, 0 (gripping) to 1. */
@@ -174,16 +213,17 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
       fyf *= k;
     }
   }
-  if (rearSlideModel == REAR_SLIDE_COMBINED_STICKY && fxr > 0) {
-    // Under power: break away on combined demand, stay sliding until it drops well below sliding grip.
+  if (rearSlideModel == REAR_SLIDE_COMBINED && fxr > 0) {
+    // Under power: break away on combined demand past peak grip, grip again below sliding grip.
     const demandR = Math.sqrt(fxr * fxr + fyr * fyr);
-    const slideCap = SLIDE_MU * capR;
+    const slideCap = rearSlideMu * capR;
     if (!rearSliding) rearSliding = demandR > capR;
-    else if (demandR < rearSlideExit * slideCap) rearSliding = false;
+    else if (demandR < slideCap) rearSliding = false;
     if (rearSliding) {
-      rearSlide = Math.min(1.0, Math.max(SLIDE_MIN, demandR / capR - 1.0 + SLIDE_MIN));
-      fyr = clamp(fyr, -SLIDE_LATERAL * slideCap, SLIDE_LATERAL * slideCap);
-      fxr = Math.min(fxr, Math.sqrt(slideCap * slideCap - fyr * fyr));
+      spinningRear(throttleCmd * p(POWER), slideCap, Math.max(vx, MIN_DRIVE_SPEED), vy - b * r);
+      fxr = spinFx;
+      fyr = spinFy;
+      rearSlide = Math.min(1.0, SLIDE_MIN + spinRatio);
     }
   } else if (Math.abs(fxr) > capR) {
     // Braking (or solo-1's drive-only rule): the drive or brake force alone is over the limit.

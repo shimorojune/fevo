@@ -92,16 +92,16 @@ test("solo-2 is solo-1 plus power oversteer, and solo-1 has no tyres block", () 
   assert.deepEqual(rest, (({ id: _i, simVersion: _s, ...r }) => r)(SOLO_1));
   assert.equal(id, "solo-2");
   assert.equal(simVersion, "1.1.0");
-  assert.deepEqual(tyres, { rearSlide: "combined-sticky", rearSlideExit: 0.88 });
+  assert.deepEqual(tyres, { rearSlide: "combined-slip", rearSlideMu: 0.9 });
   assert.ok(!("tyres" in SOLO_1));
 });
 
 test("tyres map to the simulator's rear slide model codes", () => {
   assert.deepEqual(rearSlideArgs(), [0, 1]);
   assert.deepEqual(rearSlideArgs(DEFAULT_TYRES), [0, 1]);
-  assert.deepEqual(rearSlideArgs(SOLO_2.tyres), [1, 0.88]);
-  assert.throws(() => rearSlideArgs({ rearSlide: "combined-sticky", rearSlideExit: 0 }));
-  assert.throws(() => rearSlideArgs({ rearSlide: "wet" as never, rearSlideExit: 0.9 }));
+  assert.deepEqual(rearSlideArgs(SOLO_2.tyres), [1, 0.9]);
+  assert.throws(() => rearSlideArgs({ rearSlide: "combined-slip", rearSlideMu: 0 }));
+  assert.throws(() => rearSlideArgs({ rearSlide: "wet" as never, rearSlideMu: 0.9 }));
 });
 
 test("rules versions are listed once, oldest first, and found by id", () => {

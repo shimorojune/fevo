@@ -162,8 +162,8 @@
   "maxFileBytes": 512000
  },
  "tyres": {
-  "rearSlide": "combined-sticky",
-  "rearSlideExit": 0.88
+  "rearSlide": "combined-slip",
+  "rearSlideMu": 0.9
  },
  "carParamOrder": [
   "massKg",

@@ -10,7 +10,7 @@ import * as car from "./vehicle";
 
 /**
  * 1.1.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 adds the
- * combined-sticky rear tyre model for solo-2; solo-1 laps are unchanged.
+ * combined-slip rear tyre model for solo-2; solo-1 laps are unchanged.
  */
 export const SIM_VERSION: i32 = 10100;
 
@@ -66,11 +66,11 @@ export function setCarParams(values: Float64Array): void {
   for (let i = 0; i < PARAM_COUNT; i++) unchecked((params[i] = values[i]));
 }
 
-/** Rear tyre model under power (see setRearSlideModel in vehicle.ts): 0 drive-only (solo-1), 1 combined-sticky. */
-export function setRearSlideModel(model: i32, exit: f64): void {
-  assert(model == car.REAR_SLIDE_DRIVE_ONLY || model == car.REAR_SLIDE_COMBINED_STICKY, "unknown rear slide model");
-  assert(exit > 0 && exit <= 1, "rear slide exit must be in (0, 1]");
-  car.setRearSlideModel(model, exit);
+/** Rear tyre model under power (see setRearSlideModel in vehicle.ts): 0 drive-only (solo-1), 1 combined slip. */
+export function setRearSlideModel(model: i32, mu: f64): void {
+  assert(model == car.REAR_SLIDE_DRIVE_ONLY || model == car.REAR_SLIDE_COMBINED, "unknown rear slide model");
+  assert(mu > 0 && mu <= 1, "rear sliding friction must be in (0, 1] of peak grip");
+  car.setRearSlideModel(model, mu);
 }
 
 export function setTiming(agentHz: i32, physicsSubsteps: i32): void {

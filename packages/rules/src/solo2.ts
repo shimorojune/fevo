@@ -2,7 +2,7 @@ import { SOLO_1 } from "./solo1.ts";
 import type { Rules } from "./index.ts";
 
 /**
- * Rules version solo-2: solo-1 with power oversteer. Same car, setup knobs,
+ * Rules version solo-2: solo-1 with power oversteer (combined-slip rears). Same car, setup knobs,
  * timing, seeds, sensors and agent format; only the rear tyres under power
  * change (see tyres.ts). Needs simulator 1.1.0.
  *
@@ -14,7 +14,7 @@ export const SOLO_2 = {
   id: "solo-2",
   simVersion: "1.1.0",
   tyres: {
-    rearSlide: "combined-sticky",
-    rearSlideExit: 0.88,
+    rearSlide: "combined-slip",
+    rearSlideMu: 0.9,
   },
 } as const satisfies Rules;

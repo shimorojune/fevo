@@ -128,6 +128,22 @@ for (const id of ["spielberg", "monza", "austin"]) {
       console.log(`${id} seed ${seed}: ${lapTime(r.steps)} (${r.steps} steps)`);
     }
   });
+
+  test(`${id}: the same scripted driver laps solo-2 (combined-slip rears) within 2% of solo-1`, () => {
+    const t = loadTrackFile(id);
+    load(t);
+    for (let seed = 0; seed < 3; seed++) {
+      const solo1 = drive(t, seed).steps;
+      sim.setRearSlideModel(1, 0.9);
+      try {
+        const r = drive(t, seed);
+        assert.equal(r.status, sim.STATUS_FINISHED.value, `seed ${seed}: status ${r.status} at gate ${sim.getGatesPassed()}/${t.gates.length}`);
+        assert.ok(Math.abs(r.steps - solo1) < 0.02 * solo1, `seed ${seed}: ${lapTime(r.steps)} vs solo-1 ${lapTime(solo1)}`);
+      } finally {
+        sim.setRearSlideModel(0, 1);
+      }
+    }
+  });
 }
 
 test("laps are bit-identical when repeated", () => {

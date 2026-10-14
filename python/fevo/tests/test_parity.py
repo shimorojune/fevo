@@ -135,7 +135,7 @@ def test_step_fast_matches_step():
 def test_solo2_ships_with_power_oversteer_and_solo1_without():
     assert fevo.data.manifest()["simVersion"] == "1.1.0"
     assert fevo.load_rules("solo-1").rear_slide == (0, 1.0)
-    assert fevo.load_rules("solo-2").rear_slide == (1, 0.88)
+    assert fevo.load_rules("solo-2").rear_slide == (1, 0.9)
     one, two = fevo.load_rules("solo-1").raw, fevo.load_rules("solo-2").raw
     assert "tyres" not in one
     assert {k: v for k, v in two.items() if k not in ("id", "simVersion", "tyres")} == {
