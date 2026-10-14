@@ -9,7 +9,7 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 | Path | What |
 |---|---|
 | `apps/web` | The site: Vite + React. Circuits, upload, replay and rules; laps run in a Web Worker on the same wasm. `pnpm --filter @fevo/web dev` |
-| `packages/rules` | Rules versions (solo-1, solo-2): car params in SI units, timing, seeds, sensors. Single source of truth. |
+| `packages/rules` | Rules versions (solo-1, solo-2, solo-3): car params in SI units, timing, seeds, sensors. Single source of truth. |
 | `packages/branding` | Every team livery and circuit display name. Flip `BRANDING_MODE` to go generic everywhere. |
 | `packages/tracks` | Baked track file format; baked tracks land in `packages/tracks/data/`. |
 | `packages/sim-core` | AssemblyScript simulator compiled to one `sim.wasm` for browser, Node verifier and Python. Physics, sensors, laps and network evaluation. |
