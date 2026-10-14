@@ -10,6 +10,7 @@
     --grass: #e9eadf; --asphalt: #3b3b3e; --edge: #ffffff; --gate: rgba(127,178,255,.35);
     --start: #e5484d; --accent: #2563eb; --trail: rgba(37,99,235,.55);
     --speed: #2563eb; --throttle: #16a34a; --brake: #dc2626; --steer: #7c3aed;
+    --ms-purple: #a855f7; --ms-green: #16a34a; --ms-yellow: #eab308;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #141413; --panel: #1e1e1d; --fg: #ecebe8; --muted: #9b9a97; --line: #2e2e2c;
@@ -38,6 +39,11 @@
   td, th { padding: 4px 12px; text-align: left; border-top: 1px solid var(--line); } th { color: var(--muted); font-weight: 500; }
   .hint { color: var(--muted); font-size: 12px; }
   .row { display: flex; gap: 8px; align-items: center; }
+  .ms { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; padding: 4px 12px 8px; }
+  .ms i { height: 14px; border-radius: 2px; background: var(--line); outline-offset: 1px; }
+  .sectors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0 12px 12px; font-variant-numeric: tabular-nums; }
+  .sectors div { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+  .sectors b { display: block; font-size: 16px; }
 </style>
 </head>
 <body>
@@ -69,6 +75,9 @@
         <div class="k hint">Throttle / brake</div><div class="bar"><i id="thr"></i></div>
         <div class="k hint" style="margin-top:8px">Steer (left − / right +)</div><div class="bar"><i id="str"></i></div>
       </div>
+      <div class="k hint" style="padding:0 12px">Mini sectors: <span style="color:var(--ms-purple)">purple</span> fastest on this page, <span style="color:var(--ms-green)">green</span> this driver's best, <span style="color:var(--ms-yellow)">yellow</span> slower than its best</div>
+      <div class="ms" id="ms"></div>
+      <div class="sectors" id="sectors"></div>
       <div class="meta" id="meta"></div>
       <table id="official"></table>
     </div>
@@ -104,6 +113,38 @@ for (const t of DATA.tracks) {
   for (const [x, y] of [...L, ...Rr]) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
   geo[t.id] = { t, left, right, centre, surface, gates, start, bounds: { minX, minY, maxX, maxY } };
 }
+
+// ---------- mini sectors (F1 colours) ----------
+// 24 mini sectors from the gates (4–5 gates each), three sectors of 8. A mini sector ends when the lap's
+// passed-gate count reaches its boundary; the last one ends at the finish line.
+const MS = 24, MS_PER_SECTOR = 8;
+const msBounds = (G) => Array.from({ length: MS - 1 }, (_, i) => Math.round(((i + 1) * G) / MS));
+/** Step at which each mini sector ends (completed ones only), from per-step passed-gate counts. */
+function msEnds(gates, steps, status, bounds) {
+  const ends = [];
+  for (let j = 0, k = 0; j < gates.length && k < bounds.length; j++) while (k < bounds.length && gates[j] >= bounds[k]) { ends.push(j); k++; }
+  if (status === "finished" && ends.length === bounds.length) ends.push(steps);
+  return ends;
+}
+const msTimes = (ends) => ends.map((e, k) => e - (k ? ends[k - 1] : 0));
+const secTimes = (t) => [0, 1, 2].map((s) => (t.length >= (s + 1) * MS_PER_SECTOR ? t.slice(s * MS_PER_SECTOR, (s + 1) * MS_PER_SECTOR).reduce((a, b) => a + b, 0) : null));
+const msColour = (t, overall, personal) => (t <= overall ? "purple" : t <= personal ? "green" : "yellow");
+for (const t of DATA.tracks) {
+  // Track segment for each mini sector, along the centre line.
+  const n = t.widthLeft.length, c = t.centerline, b = msBounds(t.gates.length);
+  const startIdx = [t.gates[0], ...b.map((k) => t.gates[k])], endIdx = [...b.map((k) => t.gates[k]), t.gates[0] + n];
+  geo[t.id].ms = startIdx.map((a, k) => { const p = new Path2D(); for (let i = a; i <= endIdx[k]; i++) { const q = i % n; i === a ? p.moveTo(c[2*q], c[2*q+1]) : p.lineTo(c[2*q], c[2*q+1]); } return p; });
+  geo[t.id].msBounds = b;
+}
+for (const l of DATA.laps) { l.msEnds = msEnds(l.gates, l.steps, l.status, geo[l.circuitId].msBounds); l.msTimes = msTimes(l.msEnds); l.secTimes = secTimes(l.msTimes); }
+// Bests per circuit: fastest of any lap on the page, and each driver's own best.
+const msBest = {};
+for (const l of DATA.laps) {
+  const o = (msBest[l.circuitId] ??= { all: [], sec: [], by: {} }), p = (o.by[l.agent] ??= { all: [], sec: [] });
+  l.msTimes.forEach((v, k) => { o.all[k] = Math.min(o.all[k] ?? Infinity, v); p.all[k] = Math.min(p.all[k] ?? Infinity, v); });
+  l.secTimes.forEach((v, k) => { if (v != null) { o.sec[k] = Math.min(o.sec[k] ?? Infinity, v); p.sec[k] = Math.min(p.sec[k] ?? Infinity, v); } });
+}
+for (let k = 0; k < MS; k++) document.getElementById("ms").appendChild(document.createElement("i"));
 
 // ---------- state ----------
 const circuits = [...new Set(DATA.laps.map((l) => l.circuitId))];
@@ -194,6 +235,11 @@ function drawMain() {
   ctx.lineWidth = 0.3; ctx.strokeStyle = css("--edge"); ctx.stroke(g.left); ctx.stroke(g.right);
   ctx.lineWidth = 0.15; ctx.strokeStyle = css("--gate"); ctx.stroke(g.gates);
   ctx.lineWidth = 0.6; ctx.strokeStyle = css("--start"); ctx.stroke(g.start);
+  // Completed mini sectors, coloured as F1 timing does.
+  const best = msBest[lap.circuitId];
+  ctx.globalAlpha = 0.45; ctx.lineWidth = 2.2;
+  lap.msEnds.forEach((e, k) => { if (e > frame) return; ctx.strokeStyle = css(`--ms-${msColour(lap.msTimes[k], best.all[k], best.by[lap.agent].all[k])}`); ctx.stroke(g.ms[k]); });
+  ctx.globalAlpha = 1;
   // Trail: the last 6 seconds.
   ctx.beginPath();
   const from = Math.max(0, Math.floor(frame) - 6 * HZ);
@@ -279,6 +325,18 @@ function hud() {
   const ts = tyreState(Math.min(i, lap.x.length - 1));
   $("tyres").textContent = ts.label || "gripping";
   $("tyres").style.color = ts.label ? (ts.f > 0 ? "#2f8fd6" : ts.rearColor === SPIN ? "#d9622b" : "#2f8fd6") : "";
+  const best = msBest[lap.circuitId], mine = best.by[lap.agent];
+  [...$("ms").children].forEach((cell, k) => {
+    const done = k < lap.msEnds.length && lap.msEnds[k] <= frame;
+    cell.style.background = done ? css(`--ms-${msColour(lap.msTimes[k], best.all[k], mine.all[k])}`) : "";
+    cell.style.outline = !done && (k === 0 || (lap.msEnds[k - 1] ?? Infinity) <= frame) && !(done || i >= lap.steps) ? `2px solid ${css("--fg")}` : "";
+    cell.title = done ? `mini sector ${k + 1}: ${(lap.msTimes[k] / HZ).toFixed(2)} s` : `mini sector ${k + 1}`;
+  });
+  $("sectors").innerHTML = lap.secTimes.map((v, k) => {
+    const done = v != null && lap.msEnds[(k + 1) * MS_PER_SECTOR - 1] <= frame;
+    const col = done ? css(`--ms-${msColour(v, best.sec[k], mine.sec[k])}`) : "";
+    return `<div><span class="hint">S${k + 1}</span><b style="color:${col}">${done ? (v / HZ).toFixed(2) + " s" : "–"}</b></div>`;
+  }).join("");
   const t = Math.max(-1, Math.min(1, lap.throttle[i])), s = Math.max(-1, Math.min(1, lap.steer[i]));
   Object.assign($("thr").style, { left: t >= 0 ? "50%" : `${50 + t * 50}%`, width: `${Math.abs(t) * 50}%`, background: t >= 0 ? css("--throttle") : css("--brake") });
   Object.assign($("str").style, { left: s >= 0 ? "50%" : `${50 + s * 50}%`, width: `${Math.abs(s) * 50}%`, background: css("--steer") });
