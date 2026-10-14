@@ -24,7 +24,8 @@ REAR_SLIDE_MODELS = ["drive-only", "combined-slip"]
 TRACK_LIMITS = ["all-corners", "one-tyre"]
 #: The extended observation's names after the standard ones (packages/rules/src/observation.ts).
 EXTENDED_OBSERVATION = ["yaw_rate", "body_slip", "lateral_velocity", "rear_slide", "front_slide", "long_accel",
-                        "left_margin", "right_margin", "curvature_50", "curvature_100", "curvature_150", "curvature_200",
+                        "left_margin", "right_margin", "curvature_25", "curvature_50", "curvature_100", "curvature_150",
+                        "curvature_200", "curvature_300", "curvature_400", "next_corner_distance", "next_corner_sharpness",
                         "progress_m"]
 
 

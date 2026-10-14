@@ -72,7 +72,7 @@ let nextGate: i32 = 1;
  */
 export const OBS_STANDARD: i32 = 0;
 export const OBS_EXTENDED: i32 = 1;
-export const EXTRA_OBS: i32 = 13;
+export const EXTRA_OBS: i32 = 18;
 let obsSet: i32 = OBS_STANDARD;
 const obs = new StaticArray<f64>(MAX_RAYS + 4 + EXTRA_OBS);
 
@@ -409,6 +409,19 @@ function observe(): void {
   if (obsSet == OBS_EXTENDED) observeExtended(rayCount + 4);
 }
 
+/** Curvature samples ahead (metres along the centre line) in the extended observation. */
+const LOOK_AHEAD_M: StaticArray<i32> = [25, 50, 100, 150, 200, 300, 400];
+/** A corner, for the next-corner inputs: centre-line radius under this many metres. */
+const CORNER_RADIUS_M: f64 = 300;
+/** How far ahead the next corner is looked for. */
+const CORNER_SEARCH_M: i32 = 600;
+
+/** Signed centre-line curvature at point i (1/m, left positive): heading change over ±10 m. */
+function curvatureAt(i: i32): f64 {
+  const n = track.n;
+  return car.wrapAngle(track.headingAt((i + 10) % n) - track.headingAt((i - 10 + n) % n)) / 20.0;
+}
+
 /**
  * The extended observation, after the standard numbers, each scaled to about
  * ±1 and, like heading and offset, positive to the right:
@@ -417,8 +430,11 @@ function observe(): void {
  *   5 longitudinal acceleration / 50 m/s² (forward positive)
  *   6 left margin, 7 right margin: metres from the tyre nearest each edge to it
  *     (the tyre points of the one-tyre limit), / 10; negative once over the line
- *   8..11 centre-line curvature 50, 100, 150, 200 m ahead, × 50 m (a 50 m radius reads 1)
- *   12 lap progress along the centre line (0..1, every metre, not every gate)
+ *   8..14 centre-line curvature 25, 50, 100, 150, 200, 300, 400 m ahead, × 50 m (a 50 m radius reads 1)
+ *   15 distance to the next corner (radius under 300 m) / 600 m; 1 when none within 600 m
+ *   16 that corner's sharpness: the strongest curvature in its first 150 m, × 50 m
+ *   17 lap progress along the centre line (0..1, every metre, not every gate)
+ * The look-ahead reaches braking zones: at 340 km/h braking starts ~250 m before a corner.
  */
 function observeExtended(b: i32): void {
   unchecked((obs[b] = clamp(-car.r / 2.0, -1, 1)));
@@ -447,12 +463,26 @@ function observeExtended(b: i32): void {
   unchecked((obs[b + 6] = clamp(left / 10.0, -1, 1)));
   unchecked((obs[b + 7] = clamp(right / 10.0, -1, 1)));
   const n = track.n;
-  for (let k = 0; k < 4; k++) {
-    const at = progressIdx + 50 * (k + 1);
-    const turn = car.wrapAngle(track.headingAt((at + 10) % n) - track.headingAt((at - 10 + n) % n));
-    unchecked((obs[b + 8 + k] = clamp((-turn / 20.0) * 50.0, -1, 1)));
+  for (let k = 0; k < LOOK_AHEAD_M.length; k++) {
+    unchecked((obs[b + 8 + k] = clamp(-curvatureAt((progressIdx + unchecked(LOOK_AHEAD_M[k])) % n) * 50.0, -1, 1)));
   }
-  unchecked((obs[b + 12] = <f64>progressIdx / <f64>n));
+  let dist = CORNER_SEARCH_M;
+  for (let d = 0; d <= CORNER_SEARCH_M; d += 5) {
+    if (Math.abs(curvatureAt((progressIdx + d) % n)) * CORNER_RADIUS_M > 1.0) {
+      dist = d;
+      break;
+    }
+  }
+  let sharp: f64 = 0;
+  if (dist < CORNER_SEARCH_M) {
+    for (let d = dist; d <= dist + 150; d += 5) {
+      const k = curvatureAt((progressIdx + d) % n);
+      if (Math.abs(k) > Math.abs(sharp)) sharp = k;
+    }
+  }
+  unchecked((obs[b + 15] = <f64>dist / <f64>CORNER_SEARCH_M));
+  unchecked((obs[b + 16] = clamp(-sharp * 50.0, -1, 1)));
+  unchecked((obs[b + 17] = <f64>progressIdx / <f64>n));
 }
 
 // ---- reading state ----

@@ -266,14 +266,18 @@ test("extended observation at the start: inside both edges, no slides, progress 
     assert.ok(o(6) > 0 && o(7) > 0, `margins ${o(6)} ${o(7)}`);
     assert.equal(o(3), 0);
     assert.equal(o(4), 0);
-    assert.ok(o(12) >= 0 && o(12) < 0.01);
-    // The start straight is ~430 m long: nothing ahead within 200 m here. From 260 m, T1 (a tight right-hander
-    // at about 430-470 m) is 200 m ahead, and right turns read positive.
-    assert.ok([8, 9, 10, 11].every((k) => Math.abs(o(k)) < 0.05), "straight ahead of the start line");
+    assert.ok(o(17) >= 0 && o(17) < 0.01);
+    // T1 is a tight right-hander about 430-470 m from the start line, and right turns read positive. From the
+    // start: straight up to 200 m, the corner at the 400 m sample (that's how braking zones get seen in time),
+    // and the next corner ~400 m away.
+    assert.ok([8, 9, 10, 11, 12].every((k) => Math.abs(o(k)) < 0.05), "straight within 200 m of the start line");
+    assert.ok(o(15) > 0.6 && o(15) < 0.8, `next corner at ${(o(15) * 600).toFixed(0)} m`);
+    assert.ok(o(16) > 0.5, `next corner sharp and to the right: ${o(16).toFixed(2)}`);
     sim.resetAtPoint(260, 0, 0, 30);
     sim.step(0, 0);
-    assert.ok(o(11) > 0.5, `T1 200 m ahead: ${[8, 9, 10, 11].map((k) => o(k).toFixed(2))}`);
-    assert.ok([8, 9].every((k) => Math.abs(o(k)) < 0.05), "still straight 50-100 m ahead");
+    assert.ok(o(12) > 0.5, `T1 200 m ahead: ${[8, 9, 10, 11, 12, 13, 14].map((k) => o(k).toFixed(2))}`);
+    assert.ok([8, 9].every((k) => Math.abs(o(k)) < 0.05), "still straight 25-50 m ahead");
+    assert.ok(o(15) > 0.2 && o(15) < 0.35, `next corner at ${(o(15) * 600).toFixed(0)} m`);
   } finally {
     sim.setObservationSet(sim.OBS_STANDARD.value);
   }

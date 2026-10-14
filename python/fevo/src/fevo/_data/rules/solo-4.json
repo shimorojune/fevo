@@ -161,10 +161,15 @@
   "long_accel",
   "left_margin",
   "right_margin",
+  "curvature_25",
   "curvature_50",
   "curvature_100",
   "curvature_150",
   "curvature_200",
+  "curvature_300",
+  "curvature_400",
+  "next_corner_distance",
+  "next_corner_sharpness",
   "progress_m"
  ],
  "action": [
