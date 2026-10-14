@@ -153,3 +153,10 @@ def test_one_simulator_switching_rules_matches_fresh_ones():
     sim.rules = fevo.load_rules("solo-1")
     sim.configure()
     assert sim.run_lap(1).hash == _case("example-mlp", "spielberg", "solo-1")["laps"][1]["hash"]
+
+
+def test_replay_can_put_one_driver_on_two_rules_versions(tmp_path):
+    program = from_json((ROOT / "examples" / "example-mlp.json").read_text())
+    out = fevo.write_replay([("mlp solo-1", program, "solo-1"), ("mlp solo-2", program, "solo-2")], tmp_path / "r.html", ["spielberg"])
+    html = out.read_text()
+    assert '"rules":"solo-1","circuitId":"spielberg"' in html and '"rules":"solo-2","circuitId":"spielberg"' in html

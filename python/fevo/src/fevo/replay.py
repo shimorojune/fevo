@@ -11,13 +11,18 @@ from .program import Program
 from .sim import Simulator, summarize_official
 
 
-def write_replay(agents: list[tuple[str, Program]], out: str | Path, tracks: list[str] | None = None, rules: Rules | str = "solo-1") -> Path:
-    r = load_rules(rules) if isinstance(rules, str) else rules
+def write_replay(agents: list[tuple[str, Program]] | list[tuple[str, Program, str]], out: str | Path,
+                 tracks: list[str] | None = None, rules: Rules | str = "solo-1") -> Path:
+    """One page of laps. An agent given as (name, program, rules id) drives that rules version instead of `rules`,
+    so one page can compare the same driver on solo-1 and solo-2."""
+    r0 = load_rules(rules) if isinstance(rules, str) else rules
     tracks = tracks or [c["id"] for c in branding()["circuits"]]
     teams = branding()["teams"]
-    sim = Simulator(r)
+    sims: dict[str, Simulator] = {}
     laps = []
-    for ai, (name, program) in enumerate(agents):
+    for ai, (name, program, *own) in enumerate(agents):
+        r = load_rules(own[0]) if own else r0
+        sim = sims.setdefault(r.id, Simulator(r))
         team = teams[ai % len(teams)]
         for tid in tracks:
             sim.configure()
@@ -30,7 +35,7 @@ def write_replay(agents: list[tuple[str, Program]], out: str | Path, tracks: lis
             t = lap.trace or {}
             rnd = lambda xs, k: [round(v * k) / k for v in xs]  # noqa: E731
             laps.append({
-                "agent": name, "circuitId": tid, "team": {"name": team["real"]["name"], "colors": team["real"]["colors"]},
+                "agent": name, "rules": r.id, "circuitId": tid, "team": {"name": team["real"]["name"], "colors": team["real"]["colors"]},
                 "seed": seed, "status": lap.status, "steps": lap.steps, "gatesPassed": lap.gates_passed,
                 "official": [{"seed": l.seed, "status": l.status, "steps": l.steps} for l in official.laps],
                 "medianSteps": official.median_steps,
@@ -39,7 +44,7 @@ def write_replay(agents: list[tuple[str, Program]], out: str | Path, tracks: lis
                 "frontSlide": rnd(t["frontSlide"], 100), "rearSlide": rnd(t["rearSlide"], 100),
             })  # fmt: skip
     data = {
-        "rules": {"id": r.id, "agentHz": r.agent_hz, "car": {"length": r.car["lengthM"], "width": r.car["widthM"]}},
+        "rules": {"id": r0.id, "agentHz": r0.agent_hz, "car": {"length": r0.car["lengthM"], "width": r0.car["widthM"]}},
         "tracks": [
             {"id": tid, "name": circuit_name(tid), "location": "", "lengthM": load_track(tid).length_m,
              "centerline": load_track(tid).raw["centerline"], "widthLeft": load_track(tid).raw["widthLeft"],
