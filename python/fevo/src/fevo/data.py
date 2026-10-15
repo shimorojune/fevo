@@ -28,6 +28,7 @@ EXTENDED_OBSERVATION = ["yaw_rate", "body_slip", "lateral_velocity", "rear_slide
                         "left_margin", "right_margin", "curvature_25", "curvature_50", "curvature_100", "curvature_150",
                         "curvature_200", "curvature_300", "curvature_400", "next_corner_distance", "next_corner_sharpness",
                         "progress_m"]
+MEMORY_OBSERVATION = ["prev_steer", "prev_throttle", "d_speed", "d_yaw_rate", "d_offset", "d_heading"]
 
 
 @dataclass(frozen=True)
@@ -94,13 +95,15 @@ class Rules:
 
     @property
     def observation_set(self) -> int:
-        """The simulator's observation-set code: 0 standard (rays, speed, progress, offset, heading), 1 extended."""
+        """The simulator's observation-set code: 0 standard (rays, speed, progress, offset, heading), 1 extended, 2 memory."""
         standard = self.raw["sensors"]["rayCount"] + 4
         extra = self.observation[standard:]
         if not extra:
             return 0
         if extra == EXTENDED_OBSERVATION:
             return 1
+        if extra == EXTENDED_OBSERVATION + MEMORY_OBSERVATION:
+            return 2
         raise ValueError(f"unknown observation set {self.observation}")
 
     def packed_car(self, setup: list[float] | None) -> list[float]:

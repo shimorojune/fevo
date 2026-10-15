@@ -281,7 +281,7 @@ test("extended observation at the start: inside both edges, no slides, progress 
   } finally {
     sim.setObservationSet(sim.OBS_STANDARD.value);
   }
-  assert.throws(() => sim.setObservationSet(2));
+  assert.throws(() => sim.setObservationSet(3));
   sim.setObservationSet(sim.OBS_STANDARD.value);
 });
 
@@ -350,4 +350,37 @@ test("a spinning car never slows faster than its grip and drag allow (solo-5); s
 
 test("the simulator rejects unknown low-speed models", () => {
   assert.throws(() => sim.setLowSpeedModel(2));
+});
+
+test("memory inputs (solo-6): zero after a reset, then last step's applied action and the 0.1 s changes", () => {
+  const t = loadTrackFile("spielberg");
+  load(t);
+  sim.setObservationSet(2);
+  try {
+    const n = sim.getObservationCount();
+    assert.equal(n, RAYS + 4 + 18 + 6);
+    const b = RAYS + 4 + 18;
+    sim.resetAtPoint(200, 0, 0, 30);
+    for (let k = 0; k < 6; k++) assert.equal(sim.getObservation(b + k), 0, `memory input ${k} right after a reset`);
+    const speeds = [sim.getVx()];
+    sim.step(2.0, -0.4);  // steering beyond lock is clamped: the memory holds what the car got
+    assert.equal(sim.getObservation(b), 1);
+    assert.equal(sim.getObservation(b + 1), -0.4);
+    speeds.push(sim.getVx());
+    for (let k = 0; k < 5; k++) { sim.step(0, -0.3); speeds.push(sim.getVx()); }
+    sim.step(0, -0.3);
+    speeds.push(sim.getVx());
+    // Six steps after the sample now being replaced: the change is against the speed six steps ago.
+    const want = Math.max(-1, Math.min(1, (speeds[7]! - speeds[1]!) / 5));
+    assert.ok(Math.abs(sim.getObservation(b + 2) - want) < 1e-12, `d_speed ${sim.getObservation(b + 2)} vs ${want}`);
+    // The extended part is the same with or without memory.
+    sim.setObservationSet(1);
+    sim.resetAtPoint(200, 0, 0, 30);
+    const ext = Array.from({ length: RAYS + 4 + 18 }, (_, i) => sim.getObservation(i));
+    sim.setObservationSet(2);
+    sim.resetAtPoint(200, 0, 0, 30);
+    for (let i = 0; i < ext.length; i++) assert.equal(sim.getObservation(i), ext[i]);
+  } finally {
+    sim.setObservationSet(0);
+  }
 });

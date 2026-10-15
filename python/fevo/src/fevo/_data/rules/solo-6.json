@@ -1,0 +1,250 @@
+{
+ "id": "solo-6",
+ "simVersion": "1.5.0",
+ "car": {
+  "massKg": 800,
+  "lengthM": 5.3,
+  "widthM": 1.9,
+  "wheelbaseM": 3.4,
+  "cgToFrontM": 1.87,
+  "cgHeightM": 0.28,
+  "yawInertiaKgM2": 1100,
+  "maxSteerRad": 0.38,
+  "steerRateRadPerS": 2.5,
+  "powerW": 750000,
+  "maxBrakeForceN": 60000,
+  "brakeBiasFront": 0.58,
+  "tyreMuFront": 2,
+  "tyreMuRear": 2.15,
+  "pacejkaBFront": 13,
+  "pacejkaBRear": 15,
+  "pacejkaC": 1.5,
+  "pacejkaE": -0.5,
+  "dragAreaM2": 1.25,
+  "downforceAreaM2": 4,
+  "aeroBalanceFront": 0.45,
+  "airDensityKgM3": 1.2,
+  "rollingResistance": 0.015,
+  "gravityMps2": 9.80665,
+  "kinematicBelowMps": 3,
+  "dynamicAboveMps": 6
+ },
+ "setup": [
+  {
+   "id": "wing",
+   "label": "Wing level",
+   "min": 0,
+   "max": 1,
+   "default": 0.3,
+   "help": "Front and rear wing angle together. 0 is a Monza low-drag trim, 1 a Monaco-style maximum-downforce trim: more grip in corners, more drag on the straights.",
+   "effects": [
+    {
+     "param": "downforceAreaM2",
+     "perUnit": 2
+    },
+    {
+     "param": "dragAreaM2",
+     "perUnit": 0.35
+    }
+   ]
+  },
+  {
+   "id": "aeroBalance",
+   "label": "Aero balance",
+   "min": 0.4,
+   "max": 0.5,
+   "default": 0.45,
+   "help": "Share of downforce on the front axle. More front sharpens turn-in at speed but makes the rear lighter in fast corners.",
+   "effects": [
+    {
+     "param": "aeroBalanceFront",
+     "perUnit": 1
+    }
+   ]
+  },
+  {
+   "id": "antiRollBalance",
+   "label": "Anti-roll bar balance",
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "help": "Front bar stiffer (+) or rear bar stiffer (−). A stiffer front bar makes the front respond faster but take more of the load transfer, so it grips less at the limit (understeer); a stiffer rear does the opposite (oversteer). Matters most in slow corners.",
+   "effects": [
+    {
+     "param": "pacejkaBFront",
+     "perUnit": 1
+    },
+    {
+     "param": "pacejkaBRear",
+     "perUnit": -1
+    },
+    {
+     "param": "tyreMuFront",
+     "perUnit": -0.15
+    },
+    {
+     "param": "tyreMuRear",
+     "perUnit": 0.15
+    }
+   ]
+  },
+  {
+   "id": "brakeBias",
+   "label": "Brake bias",
+   "min": 0.52,
+   "max": 0.64,
+   "default": 0.58,
+   "help": "Share of brake force on the front axle. Forward is stable but locks the fronts sooner; rearward uses more of the rears and stops shorter, until the rear locks and the car turns round.",
+   "effects": [
+    {
+     "param": "brakeBiasFront",
+     "perUnit": 1
+    }
+   ]
+  }
+ ],
+ "timing": {
+  "agentHz": 60,
+  "physicsSubsteps": 4,
+  "maxSteps": 12000,
+  "stopSpeedMps": 1,
+  "stopSteps": 120
+ },
+ "start": {
+  "kind": "standing",
+  "initialSpeedMps": 0
+ },
+ "seeds": [
+  {
+   "lateralM": -0.5,
+   "headingRad": -0.005
+  },
+  {
+   "lateralM": 0,
+   "headingRad": 0
+  },
+  {
+   "lateralM": 0.5,
+   "headingRad": 0.005
+  }
+ ],
+ "track": {
+  "gateSpacingM": 40
+ },
+ "sensors": {
+  "rayCount": 11,
+  "rayLengthM": 200,
+  "rayFovRad": 3.141592653589793,
+  "speedNormMps": 100
+ },
+ "observation": [
+  "ray_0",
+  "ray_1",
+  "ray_2",
+  "ray_3",
+  "ray_4",
+  "ray_5",
+  "ray_6",
+  "ray_7",
+  "ray_8",
+  "ray_9",
+  "ray_10",
+  "speed",
+  "lap_progress",
+  "lateral_offset",
+  "heading_error",
+  "yaw_rate",
+  "body_slip",
+  "lateral_velocity",
+  "rear_slide",
+  "front_slide",
+  "long_accel",
+  "left_margin",
+  "right_margin",
+  "curvature_25",
+  "curvature_50",
+  "curvature_100",
+  "curvature_150",
+  "curvature_200",
+  "curvature_300",
+  "curvature_400",
+  "next_corner_distance",
+  "next_corner_sharpness",
+  "progress_m",
+  "prev_steer",
+  "prev_throttle",
+  "d_speed",
+  "d_yaw_rate",
+  "d_offset",
+  "d_heading"
+ ],
+ "action": [
+  "steer",
+  "throttle"
+ ],
+ "agent": {
+  "maxFileBytes": 512000
+ },
+ "tyres": {
+  "rearSlide": "combined-slip",
+  "rearSlideMu": 0.9
+ },
+ "trackLimits": "one-tyre",
+ "lowSpeed": "total-speed",
+ "carParamOrder": [
+  "massKg",
+  "lengthM",
+  "widthM",
+  "wheelbaseM",
+  "cgToFrontM",
+  "cgHeightM",
+  "yawInertiaKgM2",
+  "maxSteerRad",
+  "steerRateRadPerS",
+  "powerW",
+  "maxBrakeForceN",
+  "brakeBiasFront",
+  "tyreMuFront",
+  "tyreMuRear",
+  "pacejkaBFront",
+  "pacejkaBRear",
+  "pacejkaC",
+  "pacejkaE",
+  "dragAreaM2",
+  "downforceAreaM2",
+  "aeroBalanceFront",
+  "airDensityKgM3",
+  "rollingResistance",
+  "gravityMps2",
+  "kinematicBelowMps",
+  "dynamicAboveMps"
+ ],
+ "carParamsPacked": [
+  800,
+  5.3,
+  1.9,
+  3.4,
+  1.87,
+  0.28,
+  1100,
+  0.38,
+  2.5,
+  750000,
+  60000,
+  0.58,
+  2,
+  2.15,
+  13,
+  15,
+  1.5,
+  -0.5,
+  1.25,
+  4,
+  0.45,
+  1.2,
+  0.015,
+  9.80665,
+  3,
+  6
+ ]
+}

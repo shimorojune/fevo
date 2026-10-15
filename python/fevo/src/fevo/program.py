@@ -156,7 +156,7 @@ def from_json(text: str, inputs: int | None = None, outputs: int = 2, setup_knob
     """Validate and compile an uploaded-format JSON agent, like the website does.
 
     The setup block is checked against the current rules' knobs (pass setup_knobs=None for
-    a rules version without setups). Without `inputs`, an MLP's first layer sets it (15 or 33)
+    a rules version without setups). Without `inputs`, an MLP's first layer sets it (15, 33 or 39)
     and a genome takes the standard 15; the simulator checks it against the rules when loaded."""
     if setup_knobs is _RULES_SETUP:
         from .data import load_rules
@@ -173,7 +173,7 @@ def from_json(text: str, inputs: int | None = None, outputs: int = 2, setup_knob
     if isinstance(data, dict) and isinstance(data.get("layers"), list):
         if inputs is None:
             first = data["layers"][0] if data["layers"] else None
-            inputs = first if isinstance(first, int) and first in (15, 33) else 15
+            inputs = first if isinstance(first, int) and first in (15, 33, 39) else 15
         return _with_setup(_compile_mlp(data, inputs, outputs), data, setup_knobs)
     raise AgentError("unknown_format", "This doesn't look like a NEAT genome or an MLP.")
 

@@ -9,13 +9,14 @@ import * as track from "./track";
 import * as car from "./vehicle";
 
 /**
- * 1.4.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 added the
+ * 1.5.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 added the
  * combined-slip rear tyre model for solo-2, 1.2.0 the one-tyre track limit
  * for solo-3, 1.3.0 the extended observation set (opt-in), 1.4.0 the
- * total-speed low-speed model for solo-5 (opt-in). Laps under earlier rules
- * versions are unchanged.
+ * total-speed low-speed model for solo-5 (opt-in), 1.5.0 the memory
+ * observation set for solo-6 (opt-in). Laps under earlier rules versions are
+ * unchanged.
  */
-export const SIM_VERSION: i32 = 10400;
+export const SIM_VERSION: i32 = 10500;
 
 /** Track limits: the whole car inside the edges (solo-1, solo-2). */
 export const LIMITS_ALL_CORNERS: i32 = 0;
@@ -73,9 +74,27 @@ let nextGate: i32 = 1;
  */
 export const OBS_STANDARD: i32 = 0;
 export const OBS_EXTENDED: i32 = 1;
+/**
+ * OBS_MEMORY (solo-6): the extended set followed by MEMORY_OBS numbers of short memory: the steering and pedal the
+ * car actually got last step, and how forward speed, yaw rate, lateral offset and heading to the track changed over
+ * the last MEMORY_STEPS steps (see observeMemory()). All zero right after a reset, so a lap is still decided by the
+ * rules, the track, the start and the agent alone.
+ */
+export const OBS_MEMORY: i32 = 2;
 export const EXTRA_OBS: i32 = 18;
+export const MEMORY_OBS: i32 = 6;
+const MEMORY_STEPS: i32 = 6;
 let obsSet: i32 = OBS_STANDARD;
-const obs = new StaticArray<f64>(MAX_RAYS + 4 + EXTRA_OBS);
+const obs = new StaticArray<f64>(MAX_RAYS + 4 + EXTRA_OBS + MEMORY_OBS);
+// Memory state: the action applied last step, and ring buffers of the last MEMORY_STEPS samples.
+let lastSteer: f64 = 0;
+let lastThrottle: f64 = 0;
+let memFresh: bool = true;
+let memHead: i32 = 0;
+const memSpeed = new StaticArray<f64>(MEMORY_STEPS);
+const memYawRate = new StaticArray<f64>(MEMORY_STEPS);
+const memOffset = new StaticArray<f64>(MEMORY_STEPS);
+const memHeading = new StaticArray<f64>(MEMORY_STEPS);
 
 // ---- configuration ----
 
@@ -129,13 +148,13 @@ export function setLimits(maxLapSteps: i32, stopSpeedMps: f64, stopAfterSteps: i
 }
 
 export function setObservationSet(set: i32): void {
-  assert(set == OBS_STANDARD || set == OBS_EXTENDED, "unknown observation set");
+  assert(set == OBS_STANDARD || set == OBS_EXTENDED || set == OBS_MEMORY, "unknown observation set");
   obsSet = set;
 }
 
-/** Numbers in the observation: rayCount + 4, plus EXTRA_OBS for the extended set. */
+/** Numbers in the observation: rayCount + 4, plus EXTRA_OBS for the extended set, plus MEMORY_OBS for memory. */
 export function getObservationCount(): i32 {
-  return rayCount + 4 + (obsSet == OBS_EXTENDED ? EXTRA_OBS : 0);
+  return rayCount + 4 + (obsSet == OBS_STANDARD ? 0 : EXTRA_OBS) + (obsSet == OBS_MEMORY ? MEMORY_OBS : 0);
 }
 
 export function setSensors(count: i32, lengthM: f64, fovRad: f64, speedNormMps: f64): void {
@@ -226,6 +245,9 @@ export function reset(x: f64, y: f64, yaw: f64, speed: f64): void {
   steps = 0;
   status = STATUS_RUNNING;
   slowSteps = 0;
+  lastSteer = 0;
+  lastThrottle = 0;
+  memFresh = true;
 }
 
 /** Place the car on the start line, nudged by a seed. Positive values move/turn it right. */
@@ -268,6 +290,8 @@ export function step(steer: f64, throttle: f64): i32 {
   }
   const s = steer < -1 ? -1.0 : steer > 1 ? 1.0 : steer;
   const t = throttle < -1 ? -1.0 : throttle > 1 ? 1.0 : throttle;
+  lastSteer = s;
+  lastThrottle = t;
   stepFrontSlide = 0;
   stepRearSlide = 0;
   for (let k = 0; k < substeps; k++) {
@@ -314,7 +338,7 @@ export function getAgentThrottle(): f64 {
   return agent.outThrottle;
 }
 
-const probe = new StaticArray<f64>(MAX_RAYS + 4 + EXTRA_OBS);
+const probe = new StaticArray<f64>(MAX_RAYS + 4 + EXTRA_OBS + MEMORY_OBS);
 
 /**
  * Fast path for step-by-step training hosts: one call per step. Steps, then
@@ -413,7 +437,43 @@ function observe(): void {
   unchecked((obs[rayCount + 1] = <f64>(nextGate - 1) / <f64>track.gateCount));
   unchecked((obs[rayCount + 2] = clamp(-track.lateralAt(i, car.x, car.y) / half, -1, 1)));
   unchecked((obs[rayCount + 3] = car.wrapAngle(track.headingAt(i) - c) / Math.PI));
-  if (obsSet == OBS_EXTENDED) observeExtended(rayCount + 4);
+  if (obsSet != OBS_STANDARD) observeExtended(rayCount + 4);
+  if (obsSet == OBS_MEMORY) observeMemory(rayCount + 4 + EXTRA_OBS, i);
+}
+
+/**
+ * The memory inputs (solo-6), positive to the right like the rest of the observation: last step's steering and
+ * pedal as applied (clamped), then the change over the last MEMORY_STEPS steps (0.1 s at 60 Hz) in forward speed
+ * (/ 5 m/s), yaw rate (/ 1 rad/s), lateral offset from the centre line (/ 1 m) and heading to the track (/ 0.2 rad),
+ * each clamped to [-1, 1]. After a reset the buffers hold the current values, so the changes start at zero.
+ */
+function observeMemory(b: i32, i: i32): void {
+  const speed = car.vx;
+  const yawRate = -car.r;
+  const offset = -track.lateralAt(i, car.x, car.y);
+  const heading = car.wrapAngle(track.headingAt(i) - car.yaw);
+  if (memFresh) {
+    for (let k = 0; k < MEMORY_STEPS; k++) {
+      unchecked((memSpeed[k] = speed));
+      unchecked((memYawRate[k] = yawRate));
+      unchecked((memOffset[k] = offset));
+      unchecked((memHeading[k] = heading));
+    }
+    memHead = 0;
+    memFresh = false;
+  }
+  // memHead is the oldest sample (MEMORY_STEPS steps ago); this step's sample replaces it.
+  unchecked((obs[b] = lastSteer));
+  unchecked((obs[b + 1] = lastThrottle));
+  unchecked((obs[b + 2] = clamp((speed - unchecked(memSpeed[memHead])) / 5.0, -1, 1)));
+  unchecked((obs[b + 3] = clamp(yawRate - unchecked(memYawRate[memHead]), -1, 1)));
+  unchecked((obs[b + 4] = clamp(offset - unchecked(memOffset[memHead]), -1, 1)));
+  unchecked((obs[b + 5] = clamp(car.wrapAngle(heading - unchecked(memHeading[memHead])) / 0.2, -1, 1)));
+  unchecked((memSpeed[memHead] = speed));
+  unchecked((memYawRate[memHead] = yawRate));
+  unchecked((memOffset[memHead] = offset));
+  unchecked((memHeading[memHead] = heading));
+  memHead = (memHead + 1) % MEMORY_STEPS;
 }
 
 /** Curvature samples ahead (metres along the centre line) in the extended observation. */

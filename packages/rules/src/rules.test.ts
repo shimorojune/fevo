@@ -107,7 +107,7 @@ test("tyres map to the simulator's rear slide model codes", () => {
 test("rules versions are listed once, oldest first, and found by id", () => {
   assert.deepEqual(
     ALL_RULES.map((r) => r.id),
-    ["solo-1", "solo-2", "solo-3", "solo-4", "solo-5"],
+    ["solo-1", "solo-2", "solo-3", "solo-4", "solo-5", "solo-6"],
   );
   assert.equal(rulesById("solo-2"), SOLO_2);
   assert.throws(() => rulesById("solo-9"), /unknown rules/);
@@ -157,4 +157,18 @@ test("solo-5 is solo-4 with the total-speed low-speed model", () => {
   assert.equal(lowSpeedCode(), 0);
   assert.equal(lowSpeedCode("total-speed"), 1);
   assert.throws(() => lowSpeedCode("none" as never));
+});
+
+import { SOLO_6 } from "./solo6.ts";
+import { MEMORY_OBSERVATION } from "./observation.ts";
+
+test("solo-6 is solo-5 with the memory inputs (39)", () => {
+  const { id, simVersion, observation, ...rest } = SOLO_6;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, observation: _o, ...r }) => r)(SOLO_5));
+  assert.equal(id, "solo-6");
+  assert.equal(simVersion, "1.5.0");
+  assert.deepEqual(observation, [...SOLO_5.observation, ...MEMORY_OBSERVATION]);
+  assert.equal(observation.length, 39);
+  assert.equal(observationSetCode(SOLO_6.observation, SOLO_6.sensors.rayCount), 2);
+  assert.equal(observationSetCode(SOLO_5.observation, SOLO_5.sensors.rayCount), 1);
 });

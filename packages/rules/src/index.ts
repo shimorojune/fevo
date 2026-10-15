@@ -4,8 +4,9 @@ export { SOLO_2 } from "./solo2.ts";
 export { SOLO_3 } from "./solo3.ts";
 export { SOLO_4 } from "./solo4.ts";
 export { SOLO_5 } from "./solo5.ts";
+export { SOLO_6 } from "./solo6.ts";
 export { LOW_SPEED_MODELS, lowSpeedCode, type LowSpeedModel } from "./lowspeed.ts";
-export { EXTENDED_OBSERVATION, observationSetCode } from "./observation.ts";
+export { EXTENDED_OBSERVATION, MEMORY_OBSERVATION, observationSetCode } from "./observation.ts";
 export { TRACK_LIMITS, trackLimitsCode, type TrackLimits } from "./limits.ts";
 export { applySetup, completeSetup, setupDefaults, validateSetup, type Setup, type SetupKnob, type SetupEffect } from "./setup.ts";
 export { DEFAULT_TYRES, REAR_SLIDE_MODELS, rearSlideArgs, type RearSlideModel, type TyreRules } from "./tyres.ts";
@@ -16,6 +17,7 @@ import { SOLO_2 } from "./solo2.ts";
 import { SOLO_3 } from "./solo3.ts";
 import { SOLO_4 } from "./solo4.ts";
 import { SOLO_5 } from "./solo5.ts";
+import { SOLO_6 } from "./solo6.ts";
 import type { LowSpeedModel } from "./lowspeed.ts";
 import type { TyreRules } from "./tyres.ts";
 
@@ -32,7 +34,7 @@ export type Rules = Omit<typeof SOLO_1, "id" | "simVersion" | "observation"> & {
 };
 
 /** Every published rules version, oldest first. */
-export const ALL_RULES: readonly Rules[] = [SOLO_1, SOLO_2, SOLO_3, SOLO_4, SOLO_5];
+export const ALL_RULES: readonly Rules[] = [SOLO_1, SOLO_2, SOLO_3, SOLO_4, SOLO_5, SOLO_6];
 
 export function rulesById(id: string): Rules {
   const r = ALL_RULES.find((r) => r.id === id);
