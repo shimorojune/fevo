@@ -91,6 +91,7 @@ class Simulator:
         self.core.call("setCarParamsFromScratch", len(packed))
         self.core.call("setRearSlideModel", *self.rules.rear_slide)
         self.core.call("setTrackLimits", self.rules.track_limits)
+        self.core.call("setLowSpeedModel", self.rules.low_speed_model)
         self.core.call("setObservationSet", self.rules.observation_set)
         self.core.call("setTiming", r["timing"]["agentHz"], r["timing"]["physicsSubsteps"])
         p = practice or Practice()

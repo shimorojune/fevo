@@ -22,6 +22,7 @@ def manifest() -> dict[str, Any]:
 REAR_SLIDE_MODELS = ["drive-only", "combined-slip"]
 #: Track limits; the index is the simulator's code (packages/rules/src/limits.ts).
 TRACK_LIMITS = ["all-corners", "one-tyre"]
+LOW_SPEED_MODELS = ["forward-speed", "total-speed"]
 #: The extended observation's names after the standard ones (packages/rules/src/observation.ts).
 EXTENDED_OBSERVATION = ["yaw_rate", "body_slip", "lateral_velocity", "rear_slide", "front_slide", "long_accel",
                         "left_margin", "right_margin", "curvature_25", "curvature_50", "curvature_100", "curvature_150",
@@ -85,6 +86,11 @@ class Rules:
     def track_limits(self) -> int:
         """The simulator's track-limits code. No `trackLimits` (solo-1, solo-2) means all four corners inside."""
         return TRACK_LIMITS.index(self.raw.get("trackLimits", "all-corners"))
+
+    @property
+    def low_speed_model(self) -> int:
+        """The simulator's low-speed-model code. No `lowSpeed` (solo-1 to solo-4) means forward-speed."""
+        return LOW_SPEED_MODELS.index(self.raw.get("lowSpeed", "forward-speed"))
 
     @property
     def observation_set(self) -> int:

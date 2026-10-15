@@ -9,12 +9,13 @@ import * as track from "./track";
 import * as car from "./vehicle";
 
 /**
- * 1.3.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 added the
+ * 1.4.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 added the
  * combined-slip rear tyre model for solo-2, 1.2.0 the one-tyre track limit
- * for solo-3, 1.3.0 the extended observation set (opt-in). Laps under
- * earlier rules versions are unchanged.
+ * for solo-3, 1.3.0 the extended observation set (opt-in), 1.4.0 the
+ * total-speed low-speed model for solo-5 (opt-in). Laps under earlier rules
+ * versions are unchanged.
  */
-export const SIM_VERSION: i32 = 10300;
+export const SIM_VERSION: i32 = 10400;
 
 /** Track limits: the whole car inside the edges (solo-1, solo-2). */
 export const LIMITS_ALL_CORNERS: i32 = 0;
@@ -82,6 +83,12 @@ const obs = new StaticArray<f64>(MAX_RAYS + 4 + EXTRA_OBS);
 export function setCarParams(values: Float64Array): void {
   assert(values.length == PARAM_COUNT, "wrong car param count");
   for (let i = 0; i < PARAM_COUNT; i++) unchecked((params[i] = values[i]));
+}
+
+/** Low-speed model (see setLowSpeedModel in vehicle.ts): 0 forward speed (solo-1 to solo-4), 1 total speed (solo-5). */
+export function setLowSpeedModel(model: i32): void {
+  assert(model == car.LOW_SPEED_FORWARD || model == car.LOW_SPEED_TOTAL, "unknown low-speed model");
+  car.setLowSpeedModel(model);
 }
 
 /** Rear tyre model under power (see setRearSlideModel in vehicle.ts): 0 drive-only (solo-1), 1 combined slip. */

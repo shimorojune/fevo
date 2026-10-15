@@ -107,7 +107,7 @@ test("tyres map to the simulator's rear slide model codes", () => {
 test("rules versions are listed once, oldest first, and found by id", () => {
   assert.deepEqual(
     ALL_RULES.map((r) => r.id),
-    ["solo-1", "solo-2", "solo-3", "solo-4"],
+    ["solo-1", "solo-2", "solo-3", "solo-4", "solo-5"],
   );
   assert.equal(rulesById("solo-2"), SOLO_2);
   assert.throws(() => rulesById("solo-9"), /unknown rules/);
@@ -141,4 +141,20 @@ test("solo-4 is solo-3 with the extended observation (33 inputs)", () => {
   for (const r of [SOLO_1, SOLO_2, SOLO_3]) assert.equal(observationSetCode(r.observation, r.sensors.rayCount), 0);
   assert.equal(observationSetCode(SOLO_4.observation, SOLO_4.sensors.rayCount), 1);
   assert.throws(() => observationSetCode([...SOLO_3.observation, "lap_count"], 11));
+});
+
+import { SOLO_5 } from "./solo5.ts";
+import { LOW_SPEED_MODELS, lowSpeedCode } from "./lowspeed.ts";
+
+test("solo-5 is solo-4 with the total-speed low-speed model", () => {
+  const { id, simVersion, lowSpeed, ...rest } = SOLO_5;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, ...r }) => r)(SOLO_4));
+  assert.equal(id, "solo-5");
+  assert.equal(simVersion, "1.4.0");
+  assert.equal(lowSpeed, "total-speed");
+  for (const r of [SOLO_1, SOLO_2, SOLO_3, SOLO_4]) assert.ok(!("lowSpeed" in r));
+  assert.deepEqual(LOW_SPEED_MODELS, ["forward-speed", "total-speed"]);
+  assert.equal(lowSpeedCode(), 0);
+  assert.equal(lowSpeedCode("total-speed"), 1);
+  assert.throws(() => lowSpeedCode("none" as never));
 });

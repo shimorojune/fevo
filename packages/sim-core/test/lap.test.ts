@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { before, test } from "node:test";
-import { SOLO_1, packCarParams } from "@fevo/rules";
+import { SOLO_1, lowSpeedCode, packCarParams } from "@fevo/rules";
 import type { TrackFile } from "@fevo/tracks";
 import * as sim from "../build/sim.js";
 
@@ -308,4 +308,46 @@ test("curvature inputs are compressive: a 15 m radius reads 1, 50 m about 0.55, 
   } finally {
     sim.setObservationSet(sim.OBS_STANDARD.value);
   }
+});
+
+test("a spinning car never slows faster than its grip and drag allow (solo-5); solo-1 to solo-4's forward-speed blend did", () => {
+  // A very wide ring so the car can spin without leaving the track; full lock and full throttle spin it.
+  const radius = 600, n = Math.round(2 * Math.PI * radius), c: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n;
+    c.push(radius * Math.cos(a), radius * Math.sin(a));
+  }
+  sim.loadTrack(Float64Array.from(c), new Float64Array(n).fill(120), new Float64Array(n).fill(120), Int32Array.from([0, Math.floor(n / 2)]));
+  const car = R.car, mu = Math.max(car.tyreMuFront, car.tyreMuRear);
+  // Worst speed loss per step as a share of what every tyre at peak grip plus drag and rolling could take off.
+  const worst = (model: number, v0: number, steer: number, throttle: number): number => {
+    sim.setLowSpeedModel(model);
+    sim.setRearSlideModel(1, 0.9);
+    sim.resetAtPoint(0, 0, 0, v0);
+    let ratio = 0;
+    for (let i = 0; i < 600 && sim.getStatus() === 0; i++) {
+      const vx = sim.getVx(), vy = sim.getVy(), v = Math.hypot(vx, vy);
+      sim.step(i < 3 ? 0 : steer, i < 3 ? 0 : throttle);
+      const q = 0.5 * car.airDensityKgM3 * vx * vx;
+      const limit = mu * (G + (q * car.downforceAreaM2) / car.massKg) + (q * car.dragAreaM2) / car.massKg + car.rollingResistance * G;
+      ratio = Math.max(ratio, ((v - Math.hypot(sim.getVx(), sim.getVy())) * HZ) / limit);
+    }
+    return ratio;
+  };
+  try {
+    let old = 0;
+    for (const v0 of [15, 20, 30, 40, 55]) for (const steer of [1, -1]) for (const throttle of [1, 0.5, 0, -1]) {
+      const r = worst(lowSpeedCode("total-speed"), v0, steer, throttle);
+      assert.ok(r <= 1.0, `total-speed model: from ${v0} m/s, steer ${steer}, pedal ${throttle}: lost speed at ${r.toFixed(2)}x the limit`);
+      old = Math.max(old, worst(lowSpeedCode("forward-speed"), v0, steer, throttle));
+    }
+    assert.ok(old > 5, `the forward-speed blend should show the free braking it had (worst ${old.toFixed(1)}x the limit)`);
+  } finally {
+    sim.setLowSpeedModel(lowSpeedCode("forward-speed"));
+    sim.setRearSlideModel(0, 1);
+  }
+});
+
+test("the simulator rejects unknown low-speed models", () => {
+  assert.throws(() => sim.setLowSpeedModel(2));
 });

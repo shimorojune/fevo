@@ -57,6 +57,27 @@ let rearSlideMu: f64 = 0.9;
 export let rearSliding: bool = false;
 
 /**
+ * When the low-speed (kinematic) model takes over, chosen by the rules.
+ *
+ * LOW_SPEED_FORWARD (solo-1 to solo-4): blended in by the forward speed vx alone, and allowed to overwrite the
+ * sideways velocity at once. A car sliding sideways has little forward speed however fast it moves, so the blend
+ * deleted its sideways speed within a step or two: far more deceleration than any tyre can give (a spinning car
+ * could stop dead from 150 km/h).
+ *
+ * LOW_SPEED_TOTAL (solo-5): blended in by the total speed sqrt(vx² + vy²), and the blend never changes the
+ * sideways velocity by more than the grip the tyres' own forces left over in that substep (together at most
+ * mu × g × dt, with the larger of the two axles' mu), so a sliding or spinning car slows no faster than its grip
+ * and drag allow.
+ */
+export const LOW_SPEED_FORWARD: i32 = 0;
+export const LOW_SPEED_TOTAL: i32 = 1;
+let lowSpeedModel: i32 = LOW_SPEED_FORWARD;
+
+export function setLowSpeedModel(model: i32): void {
+  lowSpeedModel = model;
+}
+
+/**
  * Choose the rear tyre model under power.
  *
  * REAR_SLIDE_DRIVE_ONLY (solo-1): the rears spin only in a substep where the
@@ -251,7 +272,8 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
 
   const ax = (fxr + fxf * cd - fyf * sd - drag - rolling) / m + vy * r;
   axPrev = (fxr + fxf * cd - fyf * sd - drag - rolling) / m;
-  const ay = (fyr + fyf * cd + fxf * sd) / m - vx * r;
+  const ayForces = (fyr + fyf * cd + fxf * sd) / m;
+  const ay = ayForces - vx * r;
   const yawAcc = (a * (fyf * cd + fxf * sd) - b * fyr) / p(YAW_INERTIA);
 
   // Semi-implicit Euler: velocities first, then positions with the new velocities.
@@ -263,12 +285,21 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
   // Below walking pace slip angles are meaningless: blend to the kinematic model.
   const lo = p(KINEMATIC_BELOW);
   const hi = p(DYNAMIC_ABOVE);
-  const w = clamp((nvx - lo) / (hi - lo), 0, 1);
+  const total = lowSpeedModel == LOW_SPEED_TOTAL;
+  const w = clamp(((total ? Math.sqrt(nvx * nvx + nvy * nvy) : nvx) - lo) / (hi - lo), 0, 1);
   if (w < 1) {
     const tanD = Math.tan(delta);
     const vyKin = (nvx * b * tanD) / L;
     const rKin = (nvx * tanD) / L;
-    nvy = w * nvy + (1.0 - w) * vyKin;
+    if (total) {
+      // The blend may only use the grip the tyres' own forces left over this substep: together they never change
+      // the velocity by more than the tyres could (mu x g x dt).
+      const tyres = Math.sqrt(axPrev * axPrev + ayForces * ayForces) * dt;
+      const cap = Math.max(0.0, Math.max(muF, muR) * g * dt - tyres);
+      nvy += clamp(w * nvy + (1.0 - w) * vyKin - nvy, -cap, cap);
+    } else {
+      nvy = w * nvy + (1.0 - w) * vyKin;
+    }
     nr = w * nr + (1.0 - w) * rKin;
   }
 
