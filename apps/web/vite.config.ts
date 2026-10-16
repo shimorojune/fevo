@@ -7,5 +7,9 @@ export default defineConfig({
   optimizeDeps: { exclude: ["@fevo/sim-core", "@fevo/sim"] },
   build: { target: "es2022" },
   worker: { format: "es" },
-  server: { fs: { allow: ["../.."] } },
+  server: {
+    fs: { allow: ["../.."] },
+    // apps/api: `pnpm --filter @fevo/api dev`
+    proxy: { "/api": process.env.API_URL ?? "http://localhost:8787" },
+  },
 });

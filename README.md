@@ -8,6 +8,7 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 
 | Path | What |
 |---|---|
+| `apps/api` | The API: takes submissions, re-runs the three official laps in the same sim.wasm on a worker pool, ranks only exact matches with the browser's laps. Postgres via `DATABASE_URL`, embedded PGlite otherwise. `pnpm --filter @fevo/api dev` |
 | `apps/web` | The site: Vite + React. Circuits, upload, replay and rules; laps run in a Web Worker on the same wasm. `pnpm --filter @fevo/web dev` |
 | `packages/rules` | Rules versions (solo-1): car params in SI units, timing, seeds, sensors. Single source of truth. |
 | `packages/branding` | Every team livery and circuit display name. Flip `BRANDING_MODE` to go generic everywhere. |
@@ -21,7 +22,7 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 | `tools/replay` | Runs agents on every circuit and writes a self-contained replay page. |
 | `tools/parity` | Builds the neat-python parity fixture (needs Python with neat-python 2.0). |
 
-Planned next: `apps/api` and the verifier (server re-runs), leaderboard, `tools/golden`, publishing the Python package.
+Planned next: GitHub sign-in for submissions, hosting, `tools/golden`, publishing the Python package.
 
 ## Commands
 
