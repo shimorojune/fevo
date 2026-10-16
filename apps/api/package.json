@@ -1,0 +1,29 @@
+{
+  "name": "@fevo/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3",
+    "@fevo/agent-format": "workspace:*",
+    "@fevo/branding": "workspace:*",
+    "@fevo/rules": "workspace:*",
+    "@fevo/sim": "workspace:*",
+    "@fevo/sim-core": "workspace:^",
+    "@fevo/tracks": "workspace:*",
+    "@hono/node-server": "^1",
+    "drizzle-orm": "^0.44",
+    "hono": "^4",
+    "postgres": "^3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

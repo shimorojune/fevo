@@ -5,6 +5,7 @@ import { MAX_FILE_BYTES } from "@fevo/agent-format";
 import { SOLO_1 as R } from "@fevo/rules";
 import { LapsTable } from "../components/Laps";
 import { SetupSummary } from "../components/SetupSummary";
+import { SubmitPanel } from "../components/Submit";
 import { useAgents, type Agent } from "../lib/agents";
 import { lapTime } from "../lib/format";
 import { useRun } from "../sim/useRun";
@@ -139,11 +140,15 @@ export function Upload() {
             </button>
           </div>
           <LapsTable laps={run.laps} medianSteps={run.medianSteps} />
-          <p className="small muted" style={{ padding: "12px 20px 16px" }}>
-            {run.phase === "done" && !run.ranked
-              ? "An agent needs two finished laps to be ranked. Open the replay to see where it went wrong."
-              : "Submitting to the leaderboard opens once our servers can re-run laps; they'll repeat these exact laps with the same build."}
-          </p>
+          {run.phase === "done" && run.ranked && agent ? (
+            <SubmitPanel circuitId={circuitId} agentText={agent.text} laps={run.laps} />
+          ) : (
+            <p className="small muted" style={{ padding: "12px 20px 16px" }}>
+              {run.phase === "done"
+                ? "An agent needs two finished laps to be ranked. Open the replay to see where it went wrong."
+                : "Once the laps finish you can submit them; our servers repeat these exact laps with the same build."}
+            </p>
+          )}
         </section>
       )}
     </div>
