@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { CIRCUITS, circuitBrand } from "@fevo/branding";
 import { SOLO_1 as R } from "@fevo/rules";
 import { getLeaderboard, type BoardEntry } from "../lib/api";
-import { gap } from "../lib/format";
+import { GapBar, LapTime } from "../components/ui";
 
 export function Leaderboard() {
   const [params, setParams] = useSearchParams();
@@ -25,6 +25,7 @@ export function Leaderboard() {
   }, [circuitId]);
 
   const best = entries?.[0]?.medianSteps;
+  const worst = entries?.at(-1)?.medianSteps;
 
   return (
     <div className="wrap page">
@@ -54,34 +55,21 @@ export function Leaderboard() {
         </div>
       )}
       {entries && entries.length > 0 && (
-        <div className="panel table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Driver</th>
-                <th>Lap</th>
-                <th>Gap</th>
-                <th>Network</th>
-                <th>Fingerprint</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id}>
-                  <td>{e.rank}</td>
-                  <td>{e.driver}</td>
-                  <td className="mono">{e.lapTime}</td>
-                  <td className="mono muted">{e.rank === 1 || best === undefined ? "" : gap(e.medianSteps, best)}</td>
-                  <td className="small">
-                    {e.kind === "mlp" ? "MLP" : "NEAT"}, {e.parameters.toLocaleString()} params
-                  </td>
-                  <td className="mono small muted">{e.fingerprint.slice(0, 6)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ol className="board panel" aria-label={`Leaderboard, ${circuitBrand(circuitId).name}`}>
+          {entries.map((e) => (
+            <li key={e.id} className={e.rank === 1 ? "lead" : undefined}>
+              <span className="pos">{e.rank}</span>
+              <span className="driver">
+                <span>{e.driver}</span>
+                <small>
+                  {e.kind === "mlp" ? "MLP" : "NEAT"} · {e.parameters.toLocaleString()} params · {e.fingerprint.slice(0, 6)}
+                </small>
+              </span>
+              <LapTime steps={e.medianSteps} lead={e.rank === 1} />
+              <GapBar steps={e.medianSteps} best={best!} worst={worst!} />
+            </li>
+          ))}
+        </ol>
       )}
       <p className="small muted">
         Simulator {R.simVersion}, rules {R.id}. Ties go to the earlier submission.

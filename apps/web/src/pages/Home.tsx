@@ -18,7 +18,7 @@ export function Home() {
   return (
     <>
       <section className="wrap" style={{ padding: "72px 28px 64px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1280 }}>
-        <h1 style={{ fontSize: "clamp(40px, 5vw, 60px)", maxWidth: "13em", letterSpacing: "-0.035em" }}>Upload a neural network. Get a lap time you can trust.</h1>
+        <h1 style={{ fontSize: "clamp(40px, 5vw, 60px)", maxWidth: "13em", }}>Upload a neural network. Get a lap time you can trust.</h1>
         <p style={{ fontSize: 19, color: "var(--fg-2)", maxWidth: "32em" }}>
           fevo drives your agent around real Formula 1 circuits, measured to scale, on the same simulator and rules as everyone else. Then it shows you exactly
           how the lap went.
@@ -39,7 +39,7 @@ export function Home() {
           <h2 style={{ fontSize: 32 }}>How a lap gets its time</h2>
           <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: 28 }}>
             {STEPS.map(([t, d], i) => (
-              <li key={t} style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 16, borderTop: `3px solid ${i === 3 ? "var(--blue)" : "var(--fg)"}` }}>
+              <li key={t} style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 16, borderTop: `3px solid ${i === 3 ? "var(--accent)" : "var(--fg)"}` }}>
                 <span className="mono muted">{i + 1}</span>
                 <b style={{ fontSize: 18 }}>{t}</b>
                 <span style={{ color: "var(--fg-2)" }}>{d}</span>

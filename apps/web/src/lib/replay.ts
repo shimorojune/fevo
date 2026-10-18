@@ -107,20 +107,54 @@ export function thumbnailPath(track: TrackFile, w: number, h: number, pad = 4): 
   return d + "Z";
 }
 
-const PALETTE = {
-  grass: "#E6E9E2",
-  asphalt: "#3B3E44",
-  edge: "#FFFFFF",
-  gate: "rgba(31,95,214,.30)",
-  start: "#D9622B",
-  trail: "rgba(31,95,214,.65)",
-  ghost: "rgba(18,20,23,.55)",
-  fg: "#121417",
-  muted: "#586070",
-  speed: "#1F5FD6",
-  throttle: "#1E8E4E",
-  brake: "#C2372B",
-};
+/** Canvas colours, read from the CSS tokens in styles.css and cached per theme. */
+interface Palette {
+  grass: string;
+  asphalt: string;
+  edge: string;
+  gate: string;
+  start: string;
+  trail: string;
+  fg: string;
+  muted: string;
+  speed: string;
+  throttle: string;
+  brake: string;
+  mapSurface: string;
+  ghostFill: string;
+}
+
+/** #rrggbb plus an alpha, as rgba(). */
+function alpha(hex: string, a: number): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+let cached: { theme: string | undefined; p: Palette } | undefined;
+
+function palette(): Palette {
+  const theme = document.documentElement.dataset.theme;
+  if (cached && cached.theme === theme) return cached.p;
+  const css = getComputedStyle(document.documentElement);
+  const v = (name: string) => css.getPropertyValue(name).trim();
+  const p: Palette = {
+    grass: v("--scene-grass"),
+    asphalt: v("--scene-asphalt"),
+    edge: v("--scene-edge"),
+    gate: alpha(v("--info"), 0.3),
+    start: v("--accent"),
+    trail: alpha(v("--info"), 0.7),
+    fg: v("--fg"),
+    muted: v("--muted"),
+    speed: v("--info"),
+    throttle: v("--ok"),
+    brake: v("--bad"),
+    mapSurface: v("--map-surface"),
+    ghostFill: v("--scene-ghost-fill"),
+  };
+  cached = { theme, p };
+  return p;
+}
 
 export function sample(arr: ArrayLike<number>, f: number): number {
   const i = Math.max(0, Math.min(arr.length - 1, Math.floor(f)));
@@ -265,6 +299,7 @@ export interface MainView {
 export function drawMain(cv: HTMLCanvasElement, v: MainView): void {
   const ctx = cv.getContext("2d");
   if (!ctx || !v.cars.length) return;
+  const PALETTE = palette();
   const d = fitCanvas(cv);
   const W = cv.width;
   const H = cv.height;
@@ -338,13 +373,14 @@ export function drawMain(cv: HTMLCanvasElement, v: MainView): void {
   const m = v.zoom > 12 ? 10 : 20;
   ctx.fillStyle = PALETTE.fg;
   ctx.fillRect(16, H / d - 20, m * v.zoom, 2);
-  ctx.font = "12px Chivo, system-ui, sans-serif";
+  ctx.font = '12px "JetBrains Mono", ui-monospace, monospace';
   ctx.fillText(`${m} m`, 16, H / d - 26);
 }
 
 export function drawMap(cv: HTMLCanvasElement, geo: TrackGeometry, cars: Car[], frame: number): void {
   const ctx = cv.getContext("2d");
   if (!ctx) return;
+  const PALETTE = palette();
   const d = fitCanvas(cv);
   const W = cv.width;
   const H = cv.height;
@@ -356,7 +392,7 @@ export function drawMap(cv: HTMLCanvasElement, geo: TrackGeometry, cars: Car[], 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, H);
   ctx.setTransform(s, 0, 0, -s, ox, oy);
-  ctx.fillStyle = "#C9CED6";
+  ctx.fillStyle = PALETTE.mapSurface;
   ctx.fill(geo.surface, "evenodd");
   ctx.lineWidth = (2.5 * d) / s;
   ctx.strokeStyle = PALETTE.start;
@@ -374,10 +410,10 @@ export function drawMap(cv: HTMLCanvasElement, geo: TrackGeometry, cars: Car[], 
     const f = Math.min(frame, c.trace.x.length - 1);
     ctx.beginPath();
     ctx.arc(sample(c.trace.x, f), sample(c.trace.y, f), (5 * d) / s, 0, 2 * Math.PI);
-    ctx.fillStyle = c.ghost ? "#FFFFFF" : c.colors.primary;
+    ctx.fillStyle = c.ghost ? PALETTE.ghostFill : c.colors.primary;
     ctx.fill();
     ctx.lineWidth = (1.5 * d) / s;
-    ctx.strokeStyle = c.ghost ? PALETTE.fg : "#FFFFFF";
+    ctx.strokeStyle = c.ghost ? PALETTE.fg : PALETTE.edge;
     ctx.stroke();
   }
 }
@@ -386,6 +422,7 @@ export function drawMap(cv: HTMLCanvasElement, geo: TrackGeometry, cars: Car[], 
 export function drawTelemetry(cv: HTMLCanvasElement, trace: LapTrace, frame: number): void {
   const ctx = cv.getContext("2d");
   if (!ctx) return;
+  const PALETTE = palette();
   const d = fitCanvas(cv);
   const W = cv.width;
   const H = cv.height;
@@ -421,7 +458,7 @@ export function drawTelemetry(cv: HTMLCanvasElement, trace: LapTrace, frame: num
   ctx.lineWidth = 1.5 * d;
   ctx.stroke();
   ctx.fillStyle = PALETTE.muted;
-  ctx.font = `${11 * d}px Chivo, system-ui, sans-serif`;
+  ctx.font = `${11 * d}px "JetBrains Mono", ui-monospace, monospace`;
   ctx.fillText(`Speed, peak ${Math.round(vmax * 3.6)} km/h · throttle green · brake red · ticks: lock-up blue, wheelspin orange`, 8 * d, 14 * d);
   const xp = (Math.min(frame, n - 1) / (n - 1)) * W;
   ctx.fillStyle = PALETTE.fg;
