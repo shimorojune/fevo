@@ -151,8 +151,8 @@ export function Rules() {
           <b>The middle time counts.</b> A lap that doesn't finish counts as slower than any that does, so two finished laps are needed to be ranked.
         </p>
         <p>
-          <b>Re-run before ranking.</b> Your browser runs the laps for instant feedback. When you submit, our servers run them again with the same build; only
-          exact step-count matches are ranked.
+          <b>Re-run before publishing.</b> <code>fevo publish</code> runs the laps on the training Mac; the API runs the clean ones again with the same build
+          and refuses the model unless every step count and lap hash matches.
         </p>
       </section>
 

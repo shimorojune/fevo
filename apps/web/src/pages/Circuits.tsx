@@ -1,54 +1,59 @@
 import { Link } from "react-router-dom";
-import { CIRCUITS, circuitBrand } from "@fevo/branding";
-import { SOLO_1 as R } from "@fevo/rules";
 import { TrackThumb } from "../components/TrackThumb";
-import { km } from "../lib/format";
-import { TRACK_IDS } from "../lib/tracks";
+import { api, useApi } from "../lib/api";
+import { km, lapTime } from "../lib/format";
 import { useAllTracks } from "../lib/useTrack";
 
 export function Circuits() {
-  const tracks = useAllTracks(TRACK_IDS);
+  const list = useApi(api.tracks, "tracks");
+  const models = useApi(api.models, "models");
+  const tracks = useAllTracks(list.data?.map((t) => t.id) ?? []);
+  const house = models.data?.find((m) => m.status === "house");
+
   return (
     <div className="wrap page">
       <div className="stack" style={{ gap: 8 }}>
-        <h1>Circuits</h1>
-        <p className="muted">
-          Times only compare within the same rules version. The current version is {R.id}.
-        </p>
+        <h1>Tracks</h1>
+        <p className="muted">Every track in the database. Training adds more with a publish.</p>
       </div>
+      {list.error && <div className="error-box">{list.error}</div>}
       <div className="grid-cards">
-        {CIRCUITS.map((c) => {
-          const t = tracks[c.id];
-          const b = circuitBrand(c.id);
+        {list.data?.map((s) => {
+          const t = tracks[s.id];
+          const best = house?.benchmark[s.id];
           return (
-            <article key={c.id} className="panel panel-pad stack">
+            <article key={s.id} className="panel panel-pad stack">
               <TrackThumb track={t} w={300} h={170} stroke={5} />
-              <div>
-                <h3>{b.name}</h3>
-                <p className="small muted">{b.location}</p>
+              <div className="spread">
+                <h3>{s.name}</h3>
+                <span className="row" style={{ gap: 6 }}>
+                  <span className="pill">{s.kind}</span>
+                  {s.heldOut && <span className="pill run">held out</span>}
+                </span>
               </div>
               <dl className="kv">
                 <dt>Length</dt>
-                <dt>Width</dt>
                 <dt>Gates</dt>
-                <dd>{t ? km(t.officialLengthM) : "…"}</dd>
-                <dd>{t ? `${Math.min(...t.widthLeft.map((l, i) => l + t.widthRight[i]!)).toFixed(0)}–${Math.max(...t.widthLeft.map((l, i) => l + t.widthRight[i]!)).toFixed(0)} m` : "…"}</dd>
+                <dt>Expert lap</dt>
+                <dd>{km(s.lengthM)}</dd>
                 <dd>{t?.gates.length ?? "…"}</dd>
+                <dd>{s.expertLapS != null ? lapTime(Math.round(s.expertLapS * 60)) : "–"}</dd>
               </dl>
-              <p className="small muted">Nobody has set a time here yet. The first verified lap takes P1.</p>
+              <p className="small muted">
+                {house ? (best?.lapTime ? `House driver ${house.name}: ${best.lapTime}, ${best.finished}/${best.total} laps finished.` : `No published laps here for ${house.name}.`) : "No house driver yet."}
+              </p>
               <div className="row">
-                <Link to={`/circuits/${c.id}`} className="btn primary">
+                <Link to={`/circuits/${s.id}`} className="btn primary">
                   Run a lap
                 </Link>
-                <Link to="/leaderboard" className="btn">
-                  Leaderboard
+                <Link to={`/benchmarks?track=${s.id}`} className="btn">
+                  Benchmarks
                 </Link>
               </div>
             </article>
           );
         })}
       </div>
-      <p className="small muted">New circuits arrive with each season, under a new rules version.</p>
     </div>
   );
 }

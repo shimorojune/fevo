@@ -1,14 +1,18 @@
-import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { SOLO_1 as R } from "@fevo/rules";
+import { Benchmarks } from "./pages/Benchmarks";
 import { Circuit } from "./pages/Circuit";
 import { Circuits } from "./pages/Circuits";
-import { Home } from "./pages/Home";
-import { Leaderboard } from "./pages/Leaderboard";
+import { Login } from "./pages/Login";
+import { Models } from "./pages/Models";
 import { Rules } from "./pages/Rules";
+import { TrainingRun, TrainingRuns } from "./pages/Training";
 import { Upload } from "./pages/Upload";
 import { ThemeToggle } from "./components/ui";
+import { useSession } from "./lib/session";
 
 export function App() {
+  const { user, signOut } = useSession();
   return (
     <>
       <header className="site-header">
@@ -19,25 +23,39 @@ export function App() {
             </svg>
             fevo
           </Link>
-          <nav className="nav" aria-label="Primary">
-            <NavLink to="/circuits">Circuits</NavLink>
-            <NavLink to="/leaderboard">Leaderboard</NavLink>
-            <NavLink to="/rules">Rules</NavLink>
-          </nav>
-          <Link to="/upload" className="btn dark">
-            Upload an agent
-          </Link>
+          {user && (
+            <>
+              <nav className="nav" aria-label="Primary">
+                <NavLink to="/models">Models</NavLink>
+                <NavLink to="/circuits">Tracks</NavLink>
+                <NavLink to="/benchmarks">Benchmarks</NavLink>
+                <NavLink to="/training">Training</NavLink>
+                <NavLink to="/rules">Rules</NavLink>
+              </nav>
+              <Link to="/upload" className="btn dark">
+                Run a file
+              </Link>
+            </>
+          )}
         </div>
       </header>
       <main>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/circuits" element={<Circuits />} />
-          <Route path="/circuits/:id" element={<Circuit />} />
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/rules" element={<Rules />} />
-        </Routes>
+        {user ? (
+          <Routes>
+            <Route path="/" element={<Navigate to="/models" replace />} />
+            <Route path="/models" element={<Models />} />
+            <Route path="/circuits" element={<Circuits />} />
+            <Route path="/circuits/:id" element={<Circuit />} />
+            <Route path="/benchmarks" element={<Benchmarks />} />
+            <Route path="/training" element={<TrainingRuns />} />
+            <Route path="/training/:id" element={<TrainingRun />} />
+            <Route path="/upload" element={<Upload />} />
+            <Route path="/rules" element={<Rules />} />
+            <Route path="*" element={<Navigate to="/models" replace />} />
+          </Routes>
+        ) : (
+          <Login />
+        )}
       </main>
       <footer>
         <div className="wrap spread">
@@ -45,8 +63,11 @@ export function App() {
             Simulator {R.simVersion}, rules {R.id}
           </span>
           <span className="row">
-            <Link to="/rules">Rules</Link>
-            <Link to="/rules#agent-spec">Agent spec</Link>
+            {user && (
+              <button type="button" className="theme-toggle" onClick={() => void signOut()}>
+                Sign out {user}
+              </button>
+            )}
             <ThemeToggle />
           </span>
         </div>

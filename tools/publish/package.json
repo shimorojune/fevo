@@ -1,0 +1,20 @@
+{
+  "name": "@fevo/publish",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fevo": "node src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fevo/agent-format": "workspace:*",
+    "@fevo/rules": "workspace:*",
+    "@fevo/sim": "workspace:*",
+    "@fevo/tracks": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}
