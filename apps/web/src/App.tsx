@@ -6,6 +6,7 @@ import { Home } from "./pages/Home";
 import { Leaderboard } from "./pages/Leaderboard";
 import { Rules } from "./pages/Rules";
 import { Upload } from "./pages/Upload";
+import { ThemeToggle } from "./components/ui";
 
 export function App() {
   return (
@@ -46,6 +47,7 @@ export function App() {
           <span className="row">
             <Link to="/rules">Rules</Link>
             <Link to="/rules#agent-spec">Agent spec</Link>
+            <ThemeToggle />
           </span>
         </div>
       </footer>

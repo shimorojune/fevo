@@ -160,20 +160,20 @@ export function Replay({ track, lap, colors, ghost, autoplay = true }: Props) {
           </div>
           <div className="stat">
             <div className="k">Tyres</div>
-            <div className="v sm" style={{ fontFamily: "inherit", color: tyres.label ? (tyres.front > 0 || tyres.rearColor !== "#ff8a3d" ? "#2f8fd6" : "var(--orange)") : undefined }}>
+            <div className="v sm" style={{ fontFamily: "inherit", color: tyres.label ? (tyres.front > 0 || tyres.rearColor !== "#ff8a3d" ? "var(--info)" : "var(--accent-text)") : undefined }}>
               {tyres.label || "Gripping"}
             </div>
           </div>
           <div>
             <div className="tiny muted">Throttle / brake</div>
             <div className="bar">
-              <i style={{ left: thr >= 0 ? "50%" : `${50 + thr * 50}%`, width: `${Math.abs(thr) * 50}%`, background: thr >= 0 ? "var(--green)" : "var(--red)" }} />
+              <i style={{ left: thr >= 0 ? "50%" : `${50 + thr * 50}%`, width: `${Math.abs(thr) * 50}%`, background: thr >= 0 ? "var(--ok)" : "var(--bad)" }} />
             </div>
             <div className="tiny muted" style={{ marginTop: 8 }}>
               Steer, left − / right +
             </div>
             <div className="bar">
-              <i style={{ left: str >= 0 ? "50%" : `${50 + str * 50}%`, width: `${Math.abs(str) * 50}%`, background: "#7c3aed" }} />
+              <i style={{ left: str >= 0 ? "50%" : `${50 + str * 50}%`, width: `${Math.abs(str) * 50}%`, background: "var(--fast)" }} />
             </div>
           </div>
         </div>
