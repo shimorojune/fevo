@@ -4,126 +4,148 @@ import { after, before, test } from "node:test";
 import { parseAgent } from "@fevo/agent-format";
 import { runOfficialLaps } from "@fevo/sim";
 import { createApp } from "../src/app.ts";
+import { createAuth, hashPassword } from "../src/auth.ts";
 import { openDb } from "../src/db.ts";
 import { createPool } from "../src/pool.ts";
-import { agentShape, RULES, trackFor } from "../src/season.ts";
-import { Submissions } from "../src/submissions.ts";
+import { agentShape, bakedTracks, DEFAULT_RULES } from "../src/rules.ts";
+import { Store } from "../src/store.ts";
 
 const example = (name: string) => readFileSync(new URL(`../../../examples/example-${name}.json`, import.meta.url), "utf8");
-const parked = JSON.stringify({ nodes: [{ id: 0, type: "output" }, { id: 1, type: "output", activation: "identity" }], connections: [] });
+const KEY = "k".repeat(40);
+const baked = bakedTracks();
 
-/** The laps a browser would report: the same wasm, run in this process. */
-function browserLaps(agentText: string, circuit: string) {
-  const p = parseAgent(agentText, agentShape());
+/** The laps fevo publish would report: the same wasm, run in this process. */
+function publishedLaps(agentText: string, trackId: string) {
+  const p = parseAgent(agentText, agentShape(DEFAULT_RULES));
   assert.ok(p.ok);
-  return runOfficialLaps(RULES, trackFor(circuit)!, p.program).laps.map(({ seed, status, steps, hash }) => ({ seed, status, steps, hash }));
+  const track = baked.find((t) => t.id === trackId)!.data;
+  return runOfficialLaps(DEFAULT_RULES, track, p.program).laps.map(({ seed, status, steps, hash }) => ({ trackId, seed, status, steps, hash }));
 }
 
 let db: Awaited<ReturnType<typeof openDb>>;
 let pool: ReturnType<typeof createPool>;
-let subs: Submissions;
+let store: Store;
 let app: ReturnType<typeof createApp>;
+let cookie = "";
 
 before(async () => {
   db = await openDb();
   pool = createPool(2);
-  subs = new Submissions(db.db, pool);
-  app = createApp(subs, { submitsPerHour: 5, clientAddress: (c) => c.req.header("x-test-client") ?? "a" });
+  store = new Store(db.db, pool);
+  await store.seedTracks(baked);
+  const auth = createAuth({ user: "rohit", passwordHash: hashPassword("hunter22"), sessionSecret: "s".repeat(40), publishKey: KEY, secureCookies: false });
+  app = createApp(store, auth, { clientAddress: (c) => c.req.header("x-test-client") ?? "a" });
 });
 after(async () => {
   await pool.close();
   await db.close();
 });
 
-const submit = (body: unknown, client = "a") =>
-  app.request("/api/submissions", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", "x-test-client": client } });
+const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
+  app.request(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }), headers: { "content-type": "application/json", ...headers } });
+const withKey = (method: string, path: string, body?: unknown) => send(method, path, body, { authorization: `Bearer ${KEY}` });
+const signedIn = (method: string, path: string, body?: unknown) => send(method, path, body, { cookie });
 
-test("a submission whose laps match the browser's is verified and ranked", async () => {
+test("sign-in: wrong password is refused, right one sets a session, five failures lock the address", async () => {
+  assert.equal((await send("GET", "/api/models")).status, 401);
+  assert.equal((await send("POST", "/api/login", { user: "rohit", password: "nope" })).status, 401);
+  const ok = await send("POST", "/api/login", { user: "rohit", password: "hunter22" });
+  assert.equal(ok.status, 200);
+  cookie = ok.headers.get("set-cookie")!.split(";")[0]!;
+  assert.equal((await signedIn("GET", "/api/me")).status, 200);
+  assert.equal((await send("GET", "/api/me", undefined, { cookie: `${cookie}x` })).status, 401);
+
+  for (let i = 0; i < 5; i++) await send("POST", "/api/login", { user: "rohit", password: "nope" }, { "x-test-client": "z" });
+  assert.equal((await send("POST", "/api/login", { user: "rohit", password: "hunter22" }, { "x-test-client": "z" })).status, 429);
+});
+
+test("baked tracks are seeded and readable", async () => {
+  const { tracks } = (await (await signedIn("GET", "/api/tracks")).json()) as { tracks: { id: string; data?: unknown }[] };
+  assert.deepEqual(tracks.map((t) => t.id).sort(), ["austin", "monza", "spielberg"]);
+  assert.equal(tracks[0]!.data, undefined);
+  const monza = (await (await signedIn("GET", "/api/tracks/monza")).json()) as { data: { circuitId: string } };
+  assert.equal(monza.data.circuitId, "monza");
+});
+
+test("publishing a model re-runs its official laps and shows its benchmark", async () => {
   const agent = example("genome");
-  const claimed = browserLaps(agent, "spielberg");
-  const res = await submit({ driver: "House", circuit: "spielberg", agent, claimed });
-  assert.equal(res.status, 202);
-  const { submission } = (await res.json()) as { submission: { id: string; status: string } };
-  assert.equal(submission.status, "queued");
-  await subs.drain();
+  const laps = [...publishedLaps(agent, "spielberg"), ...publishedLaps(agent, "monza"), { trackId: "monza", seed: 7, errorLevel: 0.03, status: "crashed", steps: 900, hash: "abc" }];
+  assert.equal((await send("POST", "/api/models", { name: "House", agent, laps }, { cookie })).status, 401, "the dashboard can't publish");
+  const res = await withKey("POST", "/api/models", { name: "House", agent, laps, status: "house" });
+  assert.equal(res.status, 201, await res.clone().text());
+  const { model } = (await res.json()) as { model: { id: string; status: string; benchmark: Record<string, { finished: number; total: number; medianSteps: number | null; lapTime: string | null }> } };
+  assert.equal(model.status, "house");
+  const finished = laps.filter((l) => l.trackId === "spielberg" && l.status === "finished").map((l) => l.steps).sort((a, b) => a - b);
+  assert.equal(model.benchmark.spielberg!.total, 3);
+  assert.equal(model.benchmark.spielberg!.medianSteps, finished.length >= 2 ? finished[1] : null);
 
-  const s = (await (await app.request(`/api/submissions/${submission.id}`)).json()) as Record<string, unknown>;
-  assert.equal(s.status, "verified", String(s.detail));
-  const finished = claimed.filter((l) => l.status === "finished").map((l) => l.steps).sort((a, b) => a - b);
-  assert.equal(s.medianSteps, finished[1]);
+  const full = (await (await signedIn("GET", `/api/models/${model.id}`)).json()) as { agent: string; laps: { source: string; errorLevel: number }[] };
+  assert.equal(full.agent, agent);
+  assert.equal(full.laps.length, 7);
+  assert.equal(full.laps.filter((l) => l.source === "server").length, 6);
 
-  const board = (await (await app.request("/api/leaderboard/spielberg")).json()) as { entries: { id: string; rank: number; lapTime: string }[] };
-  assert.equal(board.entries.length, 1);
-  assert.equal(board.entries[0]!.id, submission.id);
-  assert.match(board.entries[0]!.lapTime, /^\d:\d\d\.\d\d$/);
+  const again = await withKey("POST", "/api/models", { name: "Copy", agent });
+  assert.equal(again.status, 200);
+  assert.equal(((await again.json()) as { duplicate: boolean }).duplicate, true);
 });
 
-test("the same network again returns the first entry", async () => {
-  const res = await submit({ driver: "Someone else", circuit: "spielberg", agent: example("genome") });
-  assert.equal(res.status, 200);
-  const body = (await res.json()) as { duplicate: boolean; submission: { driver: string } };
-  assert.equal(body.duplicate, true);
-  assert.equal(body.submission.driver, "House");
-});
-
-test("laps that differ from the browser's are a mismatch and never ranked", async () => {
+test("laps that don't reproduce reject the publish", async () => {
   const agent = example("mlp");
-  const claimed = browserLaps(agent, "monza");
-  claimed[1] = { ...claimed[1]!, steps: claimed[1]!.steps - 1 };
-  const res = await submit({ driver: "Tamper", circuit: "monza", agent, claimed });
-  const { submission } = (await res.json()) as { submission: { id: string } };
-  await subs.drain();
-  const s = (await (await app.request(`/api/submissions/${submission.id}`)).json()) as { status: string; detail: string; medianSteps: number | null };
-  assert.equal(s.status, "mismatch");
-  assert.match(s.detail, /seed 2/);
-  assert.equal(s.medianSteps, null);
-  const board = (await (await app.request("/api/leaderboard/monza")).json()) as { entries: unknown[] };
-  assert.equal(board.entries.length, 0);
+  const laps = publishedLaps(agent, "monza");
+  laps[1] = { ...laps[1]!, steps: laps[1]!.steps - 1 };
+  const res = await withKey("POST", "/api/models", { name: "Tamper", agent, laps });
+  assert.equal(res.status, 422);
+  assert.match(((await res.json()) as { error: string }).error, /seed 2/);
+  const { models } = (await (await signedIn("GET", "/api/models")).json()) as { models: { name: string }[] };
+  assert.ok(!models.some((m) => m.name === "Tamper"));
 });
 
-test("an agent that never finishes two laps is unranked", async () => {
-  const res = await submit({ driver: "Parked", circuit: "austin", agent: parked });
-  const { submission } = (await res.json()) as { submission: { id: string } };
-  await subs.drain();
-  const s = (await (await app.request(`/api/submissions/${submission.id}`)).json()) as { status: string };
-  assert.equal(s.status, "unranked");
+test("promoting a model to house demotes the previous one", async () => {
+  const res = await withKey("POST", "/api/models", { name: "Challenger", agent: example("mlp") });
+  const { model } = (await res.json()) as { model: { id: string } };
+  const patched = await signedIn("PATCH", `/api/models/${model.id}`, { status: "house", notes: "faster at Monza" });
+  assert.equal(patched.status, 200);
+  const { models } = (await (await signedIn("GET", "/api/models")).json()) as { models: { name: string; status: string }[] };
+  assert.deepEqual(models.filter((m) => m.status === "house").map((m) => m.name), ["Challenger"]);
+});
+
+test("training runs take metrics with the key and stream them to a signed-in dashboard", async () => {
+  const run = (await (await withKey("POST", "/api/runs", { name: "solo-6 ES", method: "ES", machine: "mac", config: { pop: 64 } })).json()) as { id: string; status: string };
+  assert.equal(run.status, "running");
+
+  assert.equal((await send("GET", "/api/events")).status, 401);
+  const events = await signedIn("GET", "/api/events");
+  assert.equal(events.status, 200);
+  const reader = events.body!.getReader();
+
+  assert.equal((await withKey("POST", `/api/runs/${run.id}/metrics`, { step: 1, values: { best: 0.4, clean: 12 } })).status, 200);
+  assert.equal((await withKey("POST", `/api/runs/${run.id}/metrics`, [{ step: 2, values: { best: 0.5 } }, { step: 3, values: { best: 0.55 } }])).status, 200);
+  assert.equal((await withKey("POST", `/api/runs/${run.id}/metrics`, { step: 4, values: { best: "high" } })).status, 400);
+  assert.equal((await withKey("POST", "/api/runs/nope/metrics", { step: 1, values: {} })).status, 404);
+
+  let text = "";
+  while (!text.includes('"step":3')) text += new TextDecoder().decode((await reader.read()).value);
+  assert.match(text, /event: metrics/);
+  await reader.cancel();
+
+  assert.equal((await withKey("PATCH", `/api/runs/${run.id}`, { status: "done" })).status, 200);
+  const detail = (await (await signedIn("GET", `/api/runs/${run.id}`)).json()) as { status: string; endedAt: string | null; metrics: { step: number }[] };
+  assert.equal(detail.status, "done");
+  assert.ok(detail.endedAt);
+  assert.deepEqual(detail.metrics.map((m) => m.step), [1, 2, 3]);
 });
 
 test("bad input is rejected with a reason", async () => {
-  const invalid = await submit({ driver: "X", circuit: "spielberg", agent: "{ not json" }, "b");
+  const invalid = await withKey("POST", "/api/models", { name: "X", agent: "{ not json" });
   assert.equal(invalid.status, 422);
   assert.ok(((await invalid.json()) as { errors: unknown[] }).errors.length > 0);
-  assert.equal((await submit({ driver: "X", circuit: "nowhere", agent: parked }, "b")).status, 400);
-  assert.equal((await submit({ driver: "", circuit: "monza", agent: parked }, "b")).status, 400);
-  assert.equal((await submit({ driver: "X", circuit: "monza", agent: parked, claimed: [{ seed: "0" }] }, "b")).status, 400);
-  assert.equal((await app.request("/api/leaderboard/nowhere")).status, 404);
-  assert.equal((await app.request("/api/submissions/nope")).status, 404);
-});
-
-test("submissions are rate limited per client", async () => {
-  const mlp = JSON.parse(example("mlp")) as { weights: number[][] };
-  const variant = (i: number) => {
-    const m = structuredClone(mlp);
-    m.weights[0]![0] = (i + 1) / 1000; // differs from the plain example used above
-    return JSON.stringify(m);
-  };
-  const codes = [];
-  for (let i = 0; i < 6; i++) codes.push((await submit({ driver: "Spam", circuit: "monza", agent: variant(i) }, "c")).status);
-  await subs.drain();
-  assert.deepEqual(codes, [202, 202, 202, 202, 202, 429]);
-});
-
-test("queued rows left by a restart are verified on resume", async () => {
-  const fresh = new Submissions(db.db, pool);
-  const agent = example("genome");
-  const res = await submit({ driver: "Restart", circuit: "monza", agent }, "d");
-  const { submission } = (await res.json()) as { submission: { id: string } };
-  await subs.drain();
-  // Pretend the process died before verifying.
-  const { submissions: table } = await import("../src/db.ts");
-  const { eq } = await import("drizzle-orm");
-  await db.db.update(table).set({ status: "queued", laps: null, medianSteps: null }).where(eq(table.id, submission.id));
-  assert.equal(await fresh.resume(), 1);
-  await fresh.drain();
-  assert.equal((await fresh.get(submission.id))!.status, "verified");
+  assert.equal((await withKey("POST", "/api/models", { name: "X", agent: example("mlp"), rules: "solo-99" })).status, 400);
+  const fresh = JSON.parse(example("mlp")) as { weights: number[][] };
+  fresh.weights[0]![0] = 0.001; // not published yet, so it isn't answered as a duplicate
+  assert.equal((await withKey("POST", "/api/models", { name: "X", agent: JSON.stringify(fresh), laps: [{ trackId: "nowhere", seed: 0, status: "finished", steps: 1, hash: "a" }] })).status, 400);
+  assert.equal((await withKey("POST", "/api/models", { name: "", agent: example("mlp") })).status, 400);
+  assert.equal((await withKey("PUT", "/api/tracks/Bad Id", { name: "x", kind: "real", data: {} })).status, 400);
+  assert.equal((await withKey("PUT", "/api/tracks/gen-1", { name: "x", kind: "real", data: { schema: 1 } })).status, 400);
+  assert.equal((await signedIn("GET", "/api/models/nope")).status, 404);
+  assert.equal((await signedIn("GET", "/api/runs/nope")).status, 404);
 });
