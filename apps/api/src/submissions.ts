@@ -12,7 +12,9 @@ import { agentShape, RULES, SIM_WASM_SHA256 } from "./season.ts";
 import type { ClaimedLap } from "./verify.ts";
 
 export interface NewSubmission {
+  /** The submitter's GitHub login, shown on the board. */
   driver: string;
+  userId: string;
   circuit: string;
   agentText: string;
   claimed?: ClaimedLap[] | undefined;
@@ -47,6 +49,7 @@ export class Submissions {
       .values({
         id: randomUUID(),
         driver: s.driver,
+        userId: s.userId,
         circuit: s.circuit,
         rulesId: RULES.id,
         fingerprint: fp,
@@ -68,14 +71,27 @@ export class Submissions {
     return row;
   }
 
-  /** Verified entries for a circuit, fastest first; ties go to the earlier submission. */
-  board(circuit: string, limit = 100): Promise<Submission[]> {
-    return this.#db
+  /**
+   * Verified entries for a circuit, fastest first, one per driver (their best);
+   * ties go to the earlier submission.
+   */
+  async board(circuit: string, limit = 100): Promise<Submission[]> {
+    const rows = await this.#db
       .select()
       .from(submissions)
       .where(and(eq(submissions.rulesId, RULES.id), eq(submissions.circuit, circuit), eq(submissions.status, "verified")))
-      .orderBy(asc(submissions.medianSteps), asc(submissions.createdAt))
-      .limit(limit);
+      .orderBy(asc(submissions.medianSteps), asc(submissions.createdAt));
+    const seen = new Set<string>();
+    const best: Submission[] = [];
+    for (const r of rows) {
+      // Entries from before sign-in have no account; each stands on its own.
+      const who = r.userId ?? `entry:${r.id}`;
+      if (seen.has(who)) continue;
+      seen.add(who);
+      best.push(r);
+      if (best.length === limit) break;
+    }
+    return best;
   }
 
   /** Re-verify anything a previous process left queued. */
