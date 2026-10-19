@@ -29,6 +29,7 @@ export interface NewDrive {
   steps: number;
   gatesPassed: number;
   hash: string;
+  sectorEnds?: number[] | undefined;
   createdBy: string;
 }
 
@@ -256,7 +257,7 @@ export class Store {
     }
     const [drive] = await this.#db
       .insert(drives)
-      .values({ ...d, ghostModelId: d.ghostModelId ?? null, rulesId: model.rulesId, simSha256: SIM_WASM_SHA256, verified })
+      .values({ ...d, ghostModelId: d.ghostModelId ?? null, sectorEnds: d.sectorEnds ?? null, rulesId: model.rulesId, simSha256: SIM_WASM_SHA256, verified })
       .returning();
     this.events.emit("event", { type: "drive", drive: drive! });
     return { ok: true, drive: drive! };

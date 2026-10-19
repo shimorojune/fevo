@@ -114,6 +114,8 @@ export const drives = pgTable("drives", {
   steps: integer("steps").notNull(),
   gatesPassed: integer("gates_passed").notNull(),
   hash: text("hash").notNull(),
+  /** Step (fractional) at which each mini sector ended, for F1 sector colours against later runs. */
+  sectorEnds: jsonb("sector_ends").$type<number[]>(),
   /** True when a clean lap matches the lap the server verified for this model, track and seed. */
   verified: boolean("verified").notNull().default(false),
   createdBy: text("created_by").notNull(),
@@ -205,6 +207,7 @@ const SCHEMA = `
     steps integer NOT NULL,
     gates_passed integer NOT NULL,
     hash text NOT NULL,
+    sector_ends jsonb,
     verified boolean NOT NULL DEFAULT false,
     created_by text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()

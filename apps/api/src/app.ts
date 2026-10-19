@@ -203,7 +203,7 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
   app.post("/api/drives", auth.requireUser, async (c) => {
     const body = await json(c);
     if (!body) return bad(c, "Send a JSON body.");
-    const { modelId, trackId, seed, errorLevel, noiseSeed, ghostModelId, status, steps, gatesPassed, hash } = body;
+    const { modelId, trackId, seed, errorLevel, noiseSeed, ghostModelId, status, steps, gatesPassed, hash, sectorEnds } = body;
     if (typeof modelId !== "string" || typeof trackId !== "string") return bad(c, "modelId and trackId are required.");
     if (!Number.isInteger(seed) || (seed as number) < 0) return bad(c, "seed must be a whole number from 0.");
     if (typeof errorLevel !== "number" || !(errorLevel >= 0 && errorLevel <= 1)) return bad(c, "errorLevel must be between 0 and 1.");
@@ -212,6 +212,7 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
     if (typeof status !== "string" || !["finished", "crashed", "stopped", "timed-out", "error"].includes(status)) return bad(c, "status must be a lap result.");
     if (!Number.isInteger(steps) || (steps as number) < 0 || !Number.isInteger(gatesPassed) || (gatesPassed as number) < 0) return bad(c, "steps and gatesPassed must be whole numbers.");
     if (typeof hash !== "string" || !/^[0-9a-f]{1,64}$/.test(hash)) return bad(c, "hash must be the lap's state hash.");
+    if (sectorEnds !== undefined && !(Array.isArray(sectorEnds) && sectorEnds.length <= 64 && sectorEnds.every((x) => typeof x === "number" && x >= 0))) return bad(c, "sectorEnds must be a list of step numbers.");
     const r = await store.addDrive({
       modelId,
       trackId,
@@ -223,6 +224,7 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
       steps: steps as number,
       gatesPassed: gatesPassed as number,
       hash,
+      sectorEnds: sectorEnds as number[] | undefined,
       createdBy: auth.user(c) ?? "unknown",
     });
     return r.ok ? c.json(withDriveTime(r.drive), 201) : c.json({ error: r.error }, 404);

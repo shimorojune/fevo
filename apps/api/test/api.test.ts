@@ -156,9 +156,10 @@ test("drives: a lap run from the dashboard is saved, verified when it matches, a
   const lap = publishedLaps(example("genome"), "spielberg")[1]!;
   const base = { modelId: house.id, trackId: "spielberg", seed: 1, noiseSeed: 0, gatesPassed: 107 };
   assert.equal((await withKey("POST", "/api/drives", { ...base, errorLevel: 0, status: lap.status, steps: lap.steps, hash: lap.hash })).status, 401, "the publish key can't save drives");
-  const clean = await signedIn("POST", "/api/drives", { ...base, errorLevel: 0, status: lap.status, steps: lap.steps, hash: lap.hash });
+  const clean = await signedIn("POST", "/api/drives", { ...base, errorLevel: 0, status: lap.status, steps: lap.steps, hash: lap.hash, sectorEnds: [300.5, 640.25] });
   assert.equal(clean.status, 201, await clean.clone().text());
-  const c1 = (await clean.json()) as { id: number; verified: boolean; lapTime: string | null; createdBy: string };
+  const c1 = (await clean.json()) as { id: number; verified: boolean; lapTime: string | null; createdBy: string; sectorEnds: number[] };
+  assert.deepEqual(c1.sectorEnds, [300.5, 640.25]);
   assert.equal(c1.verified, true);
   assert.equal(c1.createdBy, "rohit");
   assert.ok(c1.lapTime);
