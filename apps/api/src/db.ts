@@ -95,7 +95,33 @@ export const laps = pgTable(
   (t) => [uniqueIndex("laps_entry").on(t.modelId, t.trackId, t.seed, t.errorLevel)],
 );
 
+/**
+ * A lap run from the dashboard's Run screen: one model, one track, one seed, at a driver-error
+ * level, with an optional ghost to compare against. Kept forever; History lists them.
+ */
+export const drives = pgTable("drives", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  modelId: text("model_id").notNull(),
+  trackId: text("track_id").notNull(),
+  rulesId: text("rules_id").notNull(),
+  simSha256: text("sim_sha256").notNull(),
+  seed: integer("seed").notNull(),
+  errorLevel: doublePrecision("error_level").notNull().default(0),
+  /** Seed of the driver-error noise; with the rest it replays the lap exactly. */
+  noiseSeed: integer("noise_seed").notNull().default(0),
+  ghostModelId: text("ghost_model_id"),
+  status: text("status").notNull(),
+  steps: integer("steps").notNull(),
+  gatesPassed: integer("gates_passed").notNull(),
+  hash: text("hash").notNull(),
+  /** True when a clean lap matches the lap the server verified for this model, track and seed. */
+  verified: boolean("verified").notNull().default(false),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Track = typeof tracks.$inferSelect;
+export type Drive = typeof drives.$inferSelect;
 export type TrainingRun = typeof trainingRuns.$inferSelect;
 export type TrainingMetric = typeof trainingMetrics.$inferSelect;
 export type Model = typeof models.$inferSelect;
@@ -165,6 +191,26 @@ const SCHEMA = `
   );
   CREATE UNIQUE INDEX IF NOT EXISTS laps_entry ON laps (model_id, track_id, seed, error_level);
   CREATE INDEX IF NOT EXISTS laps_track ON laps (track_id, rules_id, status, steps);
+  CREATE TABLE IF NOT EXISTS drives (
+    id bigserial PRIMARY KEY,
+    model_id text NOT NULL REFERENCES models(id) ON DELETE CASCADE,
+    track_id text NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    rules_id text NOT NULL,
+    sim_sha256 text NOT NULL,
+    seed integer NOT NULL,
+    error_level double precision NOT NULL DEFAULT 0,
+    noise_seed integer NOT NULL DEFAULT 0,
+    ghost_model_id text REFERENCES models(id) ON DELETE SET NULL,
+    status text NOT NULL,
+    steps integer NOT NULL,
+    gates_passed integer NOT NULL,
+    hash text NOT NULL,
+    verified boolean NOT NULL DEFAULT false,
+    created_by text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS drives_recent ON drives (created_at DESC);
+  CREATE INDEX IF NOT EXISTS drives_model_track ON drives (model_id, track_id);
 `;
 
 /** Connect and create the schema. Without a URL, an in-memory PGlite database (or a directory, with dataDir). */
