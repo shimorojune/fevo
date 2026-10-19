@@ -82,3 +82,93 @@ test("setup validation explains problems", () => {
   assert.match(validateSetup(SOLO_1_SETUP, { gears: 7 })[0]!, /Unknown setup "gears"/);
   assert.deepEqual(completeSetup(SOLO_1_SETUP, { wing: 0.5 }), [0.5, 0.45, 0, 0.58]);
 });
+
+import { ALL_RULES, rulesById } from "./index.ts";
+import { SOLO_2 } from "./solo2.ts";
+import { DEFAULT_TYRES, rearSlideArgs } from "./tyres.ts";
+
+test("solo-2 is solo-1 plus power oversteer, and solo-1 has no tyres block", () => {
+  const { id, simVersion, tyres, ...rest } = SOLO_2;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, ...r }) => r)(SOLO_1));
+  assert.equal(id, "solo-2");
+  assert.equal(simVersion, "1.1.0");
+  assert.deepEqual(tyres, { rearSlide: "combined-slip", rearSlideMu: 0.9 });
+  assert.ok(!("tyres" in SOLO_1));
+});
+
+test("tyres map to the simulator's rear slide model codes", () => {
+  assert.deepEqual(rearSlideArgs(), [0, 1]);
+  assert.deepEqual(rearSlideArgs(DEFAULT_TYRES), [0, 1]);
+  assert.deepEqual(rearSlideArgs(SOLO_2.tyres), [1, 0.9]);
+  assert.throws(() => rearSlideArgs({ rearSlide: "combined-slip", rearSlideMu: 0 }));
+  assert.throws(() => rearSlideArgs({ rearSlide: "wet" as never, rearSlideMu: 0.9 }));
+});
+
+test("rules versions are listed once, oldest first, and found by id", () => {
+  assert.deepEqual(
+    ALL_RULES.map((r) => r.id),
+    ["solo-1", "solo-2", "solo-3", "solo-4", "solo-5", "solo-6"],
+  );
+  assert.equal(rulesById("solo-2"), SOLO_2);
+  assert.throws(() => rulesById("solo-9"), /unknown rules/);
+});
+
+import { SOLO_3 } from "./solo3.ts";
+import { trackLimitsCode } from "./limits.ts";
+
+test("solo-3 is solo-2 with the one-tyre track limit; earlier versions keep all four corners in", () => {
+  const { id, simVersion, trackLimits, ...rest } = SOLO_3;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, ...r }) => r)(SOLO_2));
+  assert.equal(id, "solo-3");
+  assert.equal(simVersion, "1.2.0");
+  assert.equal(trackLimits, "one-tyre");
+  assert.ok(!("trackLimits" in SOLO_1) && !("trackLimits" in SOLO_2));
+  assert.equal(trackLimitsCode(), 0);
+  assert.equal(trackLimitsCode("one-tyre"), 1);
+  assert.throws(() => trackLimitsCode("none" as never));
+});
+
+import { SOLO_4 } from "./solo4.ts";
+import { EXTENDED_OBSERVATION, observationSetCode } from "./observation.ts";
+
+test("solo-4 is solo-3 with the extended observation (33 inputs)", () => {
+  const { id, simVersion, observation, ...rest } = SOLO_4;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, observation: _o, ...r }) => r)(SOLO_3));
+  assert.equal(id, "solo-4");
+  assert.equal(simVersion, "1.3.0");
+  assert.deepEqual(observation, [...SOLO_3.observation, ...EXTENDED_OBSERVATION]);
+  assert.equal(observation.length, 33);
+  for (const r of [SOLO_1, SOLO_2, SOLO_3]) assert.equal(observationSetCode(r.observation, r.sensors.rayCount), 0);
+  assert.equal(observationSetCode(SOLO_4.observation, SOLO_4.sensors.rayCount), 1);
+  assert.throws(() => observationSetCode([...SOLO_3.observation, "lap_count"], 11));
+});
+
+import { SOLO_5 } from "./solo5.ts";
+import { LOW_SPEED_MODELS, lowSpeedCode } from "./lowspeed.ts";
+
+test("solo-5 is solo-4 with the total-speed low-speed model", () => {
+  const { id, simVersion, lowSpeed, ...rest } = SOLO_5;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, ...r }) => r)(SOLO_4));
+  assert.equal(id, "solo-5");
+  assert.equal(simVersion, "1.4.0");
+  assert.equal(lowSpeed, "total-speed");
+  for (const r of [SOLO_1, SOLO_2, SOLO_3, SOLO_4]) assert.ok(!("lowSpeed" in r));
+  assert.deepEqual(LOW_SPEED_MODELS, ["forward-speed", "total-speed"]);
+  assert.equal(lowSpeedCode(), 0);
+  assert.equal(lowSpeedCode("total-speed"), 1);
+  assert.throws(() => lowSpeedCode("none" as never));
+});
+
+import { SOLO_6 } from "./solo6.ts";
+import { MEMORY_OBSERVATION } from "./observation.ts";
+
+test("solo-6 is solo-5 with the memory inputs (39)", () => {
+  const { id, simVersion, observation, ...rest } = SOLO_6;
+  assert.deepEqual(rest, (({ id: _i, simVersion: _s, observation: _o, ...r }) => r)(SOLO_5));
+  assert.equal(id, "solo-6");
+  assert.equal(simVersion, "1.5.0");
+  assert.deepEqual(observation, [...SOLO_5.observation, ...MEMORY_OBSERVATION]);
+  assert.equal(observation.length, 39);
+  assert.equal(observationSetCode(SOLO_6.observation, SOLO_6.sensors.rayCount), 2);
+  assert.equal(observationSetCode(SOLO_5.observation, SOLO_5.sensors.rayCount), 1);
+});

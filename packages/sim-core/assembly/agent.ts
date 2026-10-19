@@ -77,22 +77,30 @@ export function loadAgent(
   scratch = new Float64Array(maxLinks);
   for (let i = 0; i < io.length; i++) assert(io[i] >= 0 && io[i] < slotCount, "io slot out of range");
   for (let i = 0; i < lSlots.length; i++) assert(lSlots[i] >= 0 && lSlots[i] < slotCount, "link slot out of range");
+  // evaluate() reads without bounds checks, so every node's slot and link range is checked here, once.
+  for (let i = 0; i < nodeCount; i++) {
+    const slot = ints[i * 5], first = ints[i * 5 + 3], count = ints[i * 5 + 4];
+    assert(slot >= 0 && slot < slotCount, "node slot out of range");
+    assert(first >= 0 && count >= 0 && first + count <= lSlots.length, "node links out of range");
+  }
   loaded = true;
 }
 
 /** Run the network on inputs; results land in outSteer / outThrottle. */
 export function evaluate(inputs: StaticArray<f64>): void {
+  // Every index below was range-checked once in loadAgent, so the hot loops read without bounds checks
+  // (unchecked changes no arithmetic: same operations in the same order, bit-identical results).
   values.fill(0);
-  for (let i = 0; i < inputCount; i++) values[io[i]] = unchecked(inputs[i]);
+  for (let i = 0; i < inputCount; i++) unchecked((values[unchecked(io[i])] = unchecked(inputs[i])));
   for (let n = 0; n < nodeCount; n++) {
     const b = n * 5;
-    const slot = nodeInts[b];
-    const act = nodeInts[b + 1];
-    const agg = nodeInts[b + 2];
-    const first = nodeInts[b + 3];
-    const count = nodeInts[b + 4];
+    const slot = unchecked(nodeInts[b]);
+    const act = unchecked(nodeInts[b + 1]);
+    const agg = unchecked(nodeInts[b + 2]);
+    const first = unchecked(nodeInts[b + 3]);
+    const count = unchecked(nodeInts[b + 4]);
     const s = aggregate(agg, first, count);
-    values[slot] = activate(act, nodeFloats[n * 2] + nodeFloats[n * 2 + 1] * s);
+    unchecked((values[slot] = activate(act, unchecked(nodeFloats[n * 2]) + unchecked(nodeFloats[n * 2 + 1]) * s)));
   }
   outSteer = values[io[inputCount]];
   outThrottle = values[io[inputCount + 1]];
@@ -100,8 +108,18 @@ export function evaluate(inputs: StaticArray<f64>): void {
 
 function aggregate(agg: i32, first: i32, count: i32): f64 {
   if (agg == AGG_SUM || agg == AGG_MEAN) {
+    // Raw pointers held in locals: the module-level arrays would otherwise be re-read every iteration. Same products,
+    // added in the same order, so the result is bit-identical to the indexed loop.
+    const vp = values.dataStart;
+    let sp = linkSlots.dataStart + (<usize>first << 2);
+    let wp = linkWeights.dataStart + (<usize>first << 3);
+    const end = sp + (<usize>count << 2);
     let s: f64 = 0;
-    for (let k = 0; k < count; k++) s += values[linkSlots[first + k]] * linkWeights[first + k];
+    while (sp < end) {
+      s += load<f64>(vp + (<usize>load<i32>(sp) << 3)) * load<f64>(wp);
+      sp += 4;
+      wp += 8;
+    }
     return agg == AGG_SUM ? s : count > 0 ? s / <f64>count : 0;
   }
   if (agg == AGG_PRODUCT) {

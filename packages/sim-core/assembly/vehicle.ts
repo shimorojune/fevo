@@ -47,10 +47,101 @@ const SLIDE_LATERAL: f64 = 0.25;
 /** Reported slide intensity starts here, so even a light lock-up shows. */
 const SLIDE_MIN: f64 = 0.2;
 
+/** Rear tyre model under power: the rules choose it (solo-1 has no "tyres" block, so 0). */
+export const REAR_SLIDE_DRIVE_ONLY: i32 = 0;
+export const REAR_SLIDE_COMBINED: i32 = 1;
+let rearSlideModel: i32 = REAR_SLIDE_DRIVE_ONLY;
+/** Combined only: sliding friction of a spinning rear, as a share of its peak grip. */
+let rearSlideMu: f64 = 0.9;
+/** Combined only: the rears are spinning under power (kept between substeps). */
+export let rearSliding: bool = false;
+
+/**
+ * When the low-speed (kinematic) model takes over, chosen by the rules.
+ *
+ * LOW_SPEED_FORWARD (solo-1 to solo-4): blended in by the forward speed vx alone, and allowed to overwrite the
+ * sideways velocity at once. A car sliding sideways has little forward speed however fast it moves, so the blend
+ * deleted its sideways speed within a step or two: far more deceleration than any tyre can give (a spinning car
+ * could stop dead from 150 km/h).
+ *
+ * LOW_SPEED_TOTAL (solo-5): blended in by the total speed sqrt(vx² + vy²), and the blend never changes the
+ * sideways velocity by more than the grip the tyres' own forces left over in that substep (together at most
+ * mu × g × dt, with the larger of the two axles' mu), so a sliding or spinning car slows no faster than its grip
+ * and drag allow.
+ */
+export const LOW_SPEED_FORWARD: i32 = 0;
+export const LOW_SPEED_TOTAL: i32 = 1;
+let lowSpeedModel: i32 = LOW_SPEED_FORWARD;
+
+export function setLowSpeedModel(model: i32): void {
+  lowSpeedModel = model;
+}
+
+/**
+ * Choose the rear tyre model under power.
+ *
+ * REAR_SLIDE_DRIVE_ONLY (solo-1): the rears spin only in a substep where the
+ * drive force alone is more than their grip, and grip back the moment it isn't.
+ * Drive plus cornering over the limit is scaled back along the friction circle.
+ *
+ * REAR_SLIDE_COMBINED (solo-2): with the throttle open, the rears break away
+ * once drive plus cornering together (sqrt(Fx² + Fy²)) ask for more than their
+ * peak grip. A spinning tyre slides: its force is `mu` × peak grip, pointing
+ * against the contact patch's sliding velocity (wheelspin forward, the rear
+ * axle's sideways velocity across), so the more the wheels spin relative to
+ * the sideways slide, the less cornering force is left. Wheelspin comes from
+ * the power balance (see spinningRear). The rears grip again once the demand
+ * falls below sliding friction (static vs kinetic friction) or the throttle
+ * is closed: a small slide is caught by lifting and opposite lock, a big
+ * throttle mid-corner spins the car.
+ */
+export function setRearSlideModel(model: i32, mu: f64): void {
+  rearSlideModel = model;
+  rearSlideMu = mu;
+}
+
+/** Power a sliding rear tyre absorbs at wheelspin vsx: Fx times wheel surface speed. */
+function spinPower(f: f64, vxw: f64, vsy: f64, vsx: f64): f64 {
+  return (f * vsx * (vxw + vsx)) / Math.max(Math.sqrt(vsx * vsx + vsy * vsy), 1e-9);
+}
+
+/** Combined-slip results from spinningRear: rear forces and slip ratio. */
+let spinFx: f64 = 0;
+let spinFy: f64 = 0;
+let spinRatio: f64 = 0;
+
+/**
+ * Forces of a rear axle spinning under power. Quasi-static wheel (no wheel
+ * inertia, so nothing to integrate at 240 Hz): the drive power goes into the
+ * sliding tyre, `power = Fx * (vx + vsx)`, with Coulomb friction
+ * `Fx = f * vsx / |vs|` along the sliding velocity vs = (vsx, vsy). The left
+ * side rises with the wheelspin vsx, so there is exactly one root; a fixed
+ * bisection finds it, the same in every engine.
+ */
+function spinningRear(power: f64, f: f64, vxw: f64, vsy: f64): void {
+  let lo: f64 = 0;
+  let hi: f64 = 1;
+  for (let i = 0; i < 64 && spinPower(f, vxw, vsy, hi) < power; i++) hi *= 2;
+  for (let i = 0; i < 48; i++) {
+    const mid = 0.5 * (lo + hi);
+    if (spinPower(f, vxw, vsy, mid) < power) lo = mid;
+    else hi = mid;
+  }
+  const vsx = 0.5 * (lo + hi);
+  const vs = Math.max(Math.sqrt(vsx * vsx + vsy * vsy), 1e-9);
+  spinFx = (f * vsx) / vs;
+  spinFy = (-f * vsy) / vs;
+  spinRatio = vsx / Math.max(vxw, 1.0);
+}
+
 /** Lock-up or wheelspin intensity on each axle in the last substep, 0 (gripping) to 1. */
 export let frontSlide: f64 = 0;
 /** Longitudinal acceleration from the last substep, for load transfer. */
 let axPrev: f64 = 0;
+/** Longitudinal acceleration in the last substep (m/s², forward positive). */
+export function longAccel(): f64 {
+  return axPrev;
+}
 export let rearSlide: f64 = 0;
 
 export let x: f64 = 0;
@@ -70,6 +161,7 @@ export function resetVehicle(px: f64, py: f64, pyaw: f64, pvx: f64): void {
   vy = 0;
   frontSlide = 0;
   rearSlide = 0;
+  rearSliding = false;
   axPrev = 0;
   r = 0;
   delta = 0;
@@ -146,11 +238,26 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
       fyf *= k;
     }
   }
-  if (Math.abs(fxr) > capR) {
+  if (rearSlideModel == REAR_SLIDE_COMBINED && fxr > 0) {
+    // Under power: break away on combined demand past peak grip, grip again below sliding grip.
+    const demandR = Math.sqrt(fxr * fxr + fyr * fyr);
+    const slideCap = rearSlideMu * capR;
+    if (!rearSliding) rearSliding = demandR > capR;
+    else if (demandR < slideCap) rearSliding = false;
+    if (rearSliding) {
+      spinningRear(throttleCmd * p(POWER), slideCap, Math.max(vx, MIN_DRIVE_SPEED), vy - b * r);
+      fxr = spinFx;
+      fyr = spinFy;
+      rearSlide = Math.min(1.0, SLIDE_MIN + spinRatio);
+    }
+  } else if (Math.abs(fxr) > capR) {
+    // Braking (or solo-1's drive-only rule): the drive or brake force alone is over the limit.
+    rearSliding = false;
     rearSlide = Math.min(1.0, Math.abs(fxr) / capR - 1.0 + SLIDE_MIN);
     fxr = Math.sign(fxr) * SLIDE_MU * capR;
     fyr = clamp(fyr, -SLIDE_LATERAL * SLIDE_MU * capR, SLIDE_LATERAL * SLIDE_MU * capR);
   } else {
+    rearSliding = false;
     const demandR = Math.sqrt(fxr * fxr + fyr * fyr);
     if (demandR > capR) {
       const k = capR / demandR;
@@ -165,7 +272,8 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
 
   const ax = (fxr + fxf * cd - fyf * sd - drag - rolling) / m + vy * r;
   axPrev = (fxr + fxf * cd - fyf * sd - drag - rolling) / m;
-  const ay = (fyr + fyf * cd + fxf * sd) / m - vx * r;
+  const ayForces = (fyr + fyf * cd + fxf * sd) / m;
+  const ay = ayForces - vx * r;
   const yawAcc = (a * (fyf * cd + fxf * sd) - b * fyr) / p(YAW_INERTIA);
 
   // Semi-implicit Euler: velocities first, then positions with the new velocities.
@@ -177,12 +285,21 @@ export function substep(steerCmd: f64, throttleCmd: f64, dt: f64): void {
   // Below walking pace slip angles are meaningless: blend to the kinematic model.
   const lo = p(KINEMATIC_BELOW);
   const hi = p(DYNAMIC_ABOVE);
-  const w = clamp((nvx - lo) / (hi - lo), 0, 1);
+  const total = lowSpeedModel == LOW_SPEED_TOTAL;
+  const w = clamp(((total ? Math.sqrt(nvx * nvx + nvy * nvy) : nvx) - lo) / (hi - lo), 0, 1);
   if (w < 1) {
     const tanD = Math.tan(delta);
     const vyKin = (nvx * b * tanD) / L;
     const rKin = (nvx * tanD) / L;
-    nvy = w * nvy + (1.0 - w) * vyKin;
+    if (total) {
+      // The blend may only use the grip the tyres' own forces left over this substep: together they never change
+      // the velocity by more than the tyres could (mu x g x dt).
+      const tyres = Math.sqrt(axPrev * axPrev + ayForces * ayForces) * dt;
+      const cap = Math.max(0.0, Math.max(muF, muR) * g * dt - tyres);
+      nvy += clamp(w * nvy + (1.0 - w) * vyKin - nvy, -cap, cap);
+    } else {
+      nvy = w * nvy + (1.0 - w) * vyKin;
+    }
     nr = w * nr + (1.0 - w) * rKin;
   }
 

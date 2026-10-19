@@ -3,13 +3,26 @@
 // Sign convention at this boundary follows the rules: steer -1 is full left,
 // +1 full right. Internally the vehicle model uses counter-clockwise positive.
 
-import { LENGTH, PARAM_COUNT, WIDTH, p, params } from "./params";
+import { CG_TO_FRONT, LENGTH, PARAM_COUNT, WHEELBASE, WIDTH, p, params } from "./params";
 import * as agent from "./agent";
 import * as track from "./track";
 import * as car from "./vehicle";
 
-/** 1.0.0 encoded as major * 10000 + minor * 100 + patch. */
-export const SIM_VERSION: i32 = 10000;
+/**
+ * 1.5.0 encoded as major * 10000 + minor * 100 + patch. 1.1.0 added the
+ * combined-slip rear tyre model for solo-2, 1.2.0 the one-tyre track limit
+ * for solo-3, 1.3.0 the extended observation set (opt-in), 1.4.0 the
+ * total-speed low-speed model for solo-5 (opt-in), 1.5.0 the memory
+ * observation set for solo-6 (opt-in). Laps under earlier rules versions are
+ * unchanged.
+ */
+export const SIM_VERSION: i32 = 10500;
+
+/** Track limits: the whole car inside the edges (solo-1, solo-2). */
+export const LIMITS_ALL_CORNERS: i32 = 0;
+/** Track limits: any part of at least one tyre on the track (solo-3, as in F1). */
+export const LIMITS_ONE_TYRE: i32 = 1;
+let trackLimits: i32 = LIMITS_ALL_CORNERS;
 
 export const STATUS_RUNNING: i32 = 0;
 export const STATUS_FINISHED: i32 = 1;
@@ -53,7 +66,35 @@ let progressIdx: i32 = 0;
 /** Next gate to cross; gateCount means every gate is done and the start line finishes the lap. */
 let nextGate: i32 = 1;
 
-const obs = new StaticArray<f64>(MAX_RAYS + 4);
+/**
+ * Observation sets. OBS_STANDARD is what every rules version so far defines:
+ * rays, speed, gate progress, offset and heading (rayCount + 4 numbers).
+ * OBS_EXTENDED appends EXTRA_OBS numbers about the car itself and the road
+ * ahead (see observe()). The standard set's numbers are the same either way.
+ */
+export const OBS_STANDARD: i32 = 0;
+export const OBS_EXTENDED: i32 = 1;
+/**
+ * OBS_MEMORY (solo-6): the extended set followed by MEMORY_OBS numbers of short memory: the steering and pedal the
+ * car actually got last step, and how forward speed, yaw rate, lateral offset and heading to the track changed over
+ * the last MEMORY_STEPS steps (see observeMemory()). All zero right after a reset, so a lap is still decided by the
+ * rules, the track, the start and the agent alone.
+ */
+export const OBS_MEMORY: i32 = 2;
+export const EXTRA_OBS: i32 = 18;
+export const MEMORY_OBS: i32 = 6;
+const MEMORY_STEPS: i32 = 6;
+let obsSet: i32 = OBS_STANDARD;
+const obs = new StaticArray<f64>(MAX_RAYS + 4 + EXTRA_OBS + MEMORY_OBS);
+// Memory state: the action applied last step, and ring buffers of the last MEMORY_STEPS samples.
+let lastSteer: f64 = 0;
+let lastThrottle: f64 = 0;
+let memFresh: bool = true;
+let memHead: i32 = 0;
+const memSpeed = new StaticArray<f64>(MEMORY_STEPS);
+const memYawRate = new StaticArray<f64>(MEMORY_STEPS);
+const memOffset = new StaticArray<f64>(MEMORY_STEPS);
+const memHeading = new StaticArray<f64>(MEMORY_STEPS);
 
 // ---- configuration ----
 
@@ -61,6 +102,37 @@ const obs = new StaticArray<f64>(MAX_RAYS + 4);
 export function setCarParams(values: Float64Array): void {
   assert(values.length == PARAM_COUNT, "wrong car param count");
   for (let i = 0; i < PARAM_COUNT; i++) unchecked((params[i] = values[i]));
+}
+
+/** Low-speed model (see setLowSpeedModel in vehicle.ts): 0 forward speed (solo-1 to solo-4), 1 total speed (solo-5). */
+export function setLowSpeedModel(model: i32): void {
+  assert(model == car.LOW_SPEED_FORWARD || model == car.LOW_SPEED_TOTAL, "unknown low-speed model");
+  car.setLowSpeedModel(model);
+}
+
+/** Rear tyre model under power (see setRearSlideModel in vehicle.ts): 0 drive-only (solo-1), 1 combined slip. */
+export function setRearSlideModel(model: i32, mu: f64): void {
+  assert(model == car.REAR_SLIDE_DRIVE_ONLY || model == car.REAR_SLIDE_COMBINED, "unknown rear slide model");
+  assert(mu > 0 && mu <= 1, "rear sliding friction must be in (0, 1] of peak grip");
+  car.setRearSlideModel(model, mu);
+}
+
+/**
+ * How a lap ends off the track (checked every physics substep; past the limit
+ * the lap ends as crashed, whichever rule applies). There is no surface model
+ * beyond the edges: a tyre over the line grips as it would on the track.
+ *
+ * LIMITS_ALL_CORNERS: all four corners of the car's body rectangle (length
+ * by width) must be inside the edges.
+ * LIMITS_ONE_TYRE: legal while any part of at least one tyre is on the track
+ * (the edge line counts as track). Tyres sit at the axles (cgToFront ahead of
+ * the centre, wheelbase - cgToFront behind) with their outer edges at the
+ * car's full width; the part of the tyres nearest the track is always an
+ * outer edge, so tyre width doesn't change the rule.
+ */
+export function setTrackLimits(mode: i32): void {
+  assert(mode == LIMITS_ALL_CORNERS || mode == LIMITS_ONE_TYRE, "unknown track limits");
+  trackLimits = mode;
 }
 
 export function setTiming(agentHz: i32, physicsSubsteps: i32): void {
@@ -73,6 +145,16 @@ export function setLimits(maxLapSteps: i32, stopSpeedMps: f64, stopAfterSteps: i
   maxSteps = maxLapSteps;
   stopSpeed = stopSpeedMps;
   stopSteps = stopAfterSteps;
+}
+
+export function setObservationSet(set: i32): void {
+  assert(set == OBS_STANDARD || set == OBS_EXTENDED || set == OBS_MEMORY, "unknown observation set");
+  obsSet = set;
+}
+
+/** Numbers in the observation: rayCount + 4, plus EXTRA_OBS for the extended set, plus MEMORY_OBS for memory. */
+export function getObservationCount(): i32 {
+  return rayCount + 4 + (obsSet == OBS_STANDARD ? 0 : EXTRA_OBS) + (obsSet == OBS_MEMORY ? MEMORY_OBS : 0);
 }
 
 export function setSensors(count: i32, lengthM: f64, fovRad: f64, speedNormMps: f64): void {
@@ -163,6 +245,9 @@ export function reset(x: f64, y: f64, yaw: f64, speed: f64): void {
   steps = 0;
   status = STATUS_RUNNING;
   slowSteps = 0;
+  lastSteer = 0;
+  lastThrottle = 0;
+  memFresh = true;
 }
 
 /** Place the car on the start line, nudged by a seed. Positive values move/turn it right. */
@@ -205,6 +290,8 @@ export function step(steer: f64, throttle: f64): i32 {
   }
   const s = steer < -1 ? -1.0 : steer > 1 ? 1.0 : steer;
   const t = throttle < -1 ? -1.0 : throttle > 1 ? 1.0 : throttle;
+  lastSteer = s;
+  lastThrottle = t;
   stepFrontSlide = 0;
   stepRearSlide = 0;
   for (let k = 0; k < substeps; k++) {
@@ -232,7 +319,7 @@ export function step(steer: f64, throttle: f64): i32 {
 
 /** One step driven by the loaded agent, from the current observation. */
 export function agentStep(): i32 {
-  assert(agent.loaded && agent.inputCount == rayCount + 4, "agent inputs don't match the observation");
+  assert(agent.loaded && agent.inputCount == getObservationCount(), "agent inputs don't match the observation");
   agent.evaluate(obs);
   return step(agent.outSteer, agent.outThrottle);
 }
@@ -251,7 +338,7 @@ export function getAgentThrottle(): f64 {
   return agent.outThrottle;
 }
 
-const probe = new StaticArray<f64>(MAX_RAYS + 4);
+const probe = new StaticArray<f64>(MAX_RAYS + 4 + EXTRA_OBS + MEMORY_OBS);
 
 /**
  * Fast path for step-by-step training hosts: one call per step. Steps, then
@@ -261,7 +348,7 @@ const probe = new StaticArray<f64>(MAX_RAYS + 4);
  */
 export function stepToScratch(steer: f64, throttle: f64): i32 {
   const st = step(steer, throttle);
-  const k = rayCount + 4;
+  const k = getObservationCount();
   for (let i = 0; i < k; i++) unchecked((scratchF[i] = obs[i]));
   unchecked((scratchF[k] = car.vx));
   unchecked((scratchF[k + 1] = car.vy));
@@ -302,6 +389,7 @@ function updateProgress(): void {
 }
 
 function offTrack(): bool {
+  if (trackLimits == LIMITS_ONE_TYRE) return allTyresOff();
   const hl = p(LENGTH) * 0.5;
   const hw = p(WIDTH) * 0.5;
   const c = Math.cos(car.yaw);
@@ -315,6 +403,24 @@ function offTrack(): bool {
     if (track.outside(i, px, py)) return true;
   }
   return false;
+}
+
+/** One-tyre limit: off only when the outer edge of every tyre is past the edges. */
+function allTyresOff(): bool {
+  const front = p(CG_TO_FRONT);
+  const rear = front - p(WHEELBASE);
+  const hw = p(WIDTH) * 0.5;
+  const c = Math.cos(car.yaw);
+  const s = Math.sin(car.yaw);
+  for (let k = 0; k < 4; k++) {
+    const fx = k < 2 ? front : rear;
+    const fy = k % 2 == 0 ? hw : -hw;
+    const px = car.x + fx * c - fy * s;
+    const py = car.y + fx * s + fy * c;
+    const i = track.nearestLocal(px, py, progressIdx, CORNER_WINDOW);
+    if (!track.outside(i, px, py)) return false;
+  }
+  return true;
 }
 
 /** Fill the observation in the order the rules define: rays left to right, speed, progress, offset, heading. */
@@ -331,12 +437,138 @@ function observe(): void {
   unchecked((obs[rayCount + 1] = <f64>(nextGate - 1) / <f64>track.gateCount));
   unchecked((obs[rayCount + 2] = clamp(-track.lateralAt(i, car.x, car.y) / half, -1, 1)));
   unchecked((obs[rayCount + 3] = car.wrapAngle(track.headingAt(i) - c) / Math.PI));
+  if (obsSet != OBS_STANDARD) observeExtended(rayCount + 4);
+  if (obsSet == OBS_MEMORY) observeMemory(rayCount + 4 + EXTRA_OBS, i);
+}
+
+/**
+ * The memory inputs (solo-6), positive to the right like the rest of the observation: last step's steering and
+ * pedal as applied (clamped), then the change over the last MEMORY_STEPS steps (0.1 s at 60 Hz) in forward speed
+ * (/ 5 m/s), yaw rate (/ 1 rad/s), lateral offset from the centre line (/ 1 m) and heading to the track (/ 0.2 rad),
+ * each clamped to [-1, 1]. After a reset the buffers hold the current values, so the changes start at zero.
+ */
+function observeMemory(b: i32, i: i32): void {
+  const speed = car.vx;
+  const yawRate = -car.r;
+  const offset = -track.lateralAt(i, car.x, car.y);
+  const heading = car.wrapAngle(track.headingAt(i) - car.yaw);
+  if (memFresh) {
+    for (let k = 0; k < MEMORY_STEPS; k++) {
+      unchecked((memSpeed[k] = speed));
+      unchecked((memYawRate[k] = yawRate));
+      unchecked((memOffset[k] = offset));
+      unchecked((memHeading[k] = heading));
+    }
+    memHead = 0;
+    memFresh = false;
+  }
+  // memHead is the oldest sample (MEMORY_STEPS steps ago); this step's sample replaces it.
+  unchecked((obs[b] = lastSteer));
+  unchecked((obs[b + 1] = lastThrottle));
+  unchecked((obs[b + 2] = clamp((speed - unchecked(memSpeed[memHead])) / 5.0, -1, 1)));
+  unchecked((obs[b + 3] = clamp(yawRate - unchecked(memYawRate[memHead]), -1, 1)));
+  unchecked((obs[b + 4] = clamp(offset - unchecked(memOffset[memHead]), -1, 1)));
+  unchecked((obs[b + 5] = clamp(car.wrapAngle(heading - unchecked(memHeading[memHead])) / 0.2, -1, 1)));
+  unchecked((memSpeed[memHead] = speed));
+  unchecked((memYawRate[memHead] = yawRate));
+  unchecked((memOffset[memHead] = offset));
+  unchecked((memHeading[memHead] = heading));
+  memHead = (memHead + 1) % MEMORY_STEPS;
+}
+
+/** Curvature samples ahead (metres along the centre line) in the extended observation. */
+const LOOK_AHEAD_M: StaticArray<i32> = [25, 50, 100, 150, 200, 300, 400];
+/** A corner, for the next-corner inputs: centre-line radius under this many metres. */
+const CORNER_RADIUS_M: f64 = 300;
+/** How far ahead the next corner is looked for. */
+const CORNER_SEARCH_M: i32 = 600;
+/** Curvature inputs are scaled so a radius of this many metres (a tight hairpin) reads 1. */
+const CURVATURE_SCALE_M: f64 = 15.0;
+
+/**
+ * A curvature as an input, positive for a right turn: sign × √(15 m × |curvature|), at most 1.
+ * Compressive, so tight and fast corners both keep resolution: a 15 m radius reads 1, 50 m 0.55,
+ * 300 m 0.22, a straight 0. (A linear scale either saturated every hairpin and chicane at 1, or
+ * squashed fast sweepers towards 0.)
+ */
+function curvatureInput(k: f64): f64 {
+  const v = Math.sqrt(Math.abs(k) * CURVATURE_SCALE_M);
+  return k > 0 ? -Math.min(v, 1.0) : Math.min(v, 1.0);
+}
+
+/** Signed centre-line curvature at point i (1/m, left positive): heading change over ±10 m. */
+function curvatureAt(i: i32): f64 {
+  const n = track.n;
+  return car.wrapAngle(track.headingAt((i + 10) % n) - track.headingAt((i - 10 + n) % n)) / 20.0;
+}
+
+/**
+ * The extended observation, after the standard numbers, each scaled to about
+ * ±1 and, like heading and offset, positive to the right:
+ *   0 yaw rate / 2 rad/s          1 body slip angle / 45°     2 sideways velocity / 10 m/s
+ *   3 rear slide (wheelspin or lock-up, 0..1)                 4 front lock-up (0..1)
+ *   5 longitudinal acceleration / 50 m/s² (forward positive)
+ *   6 left margin, 7 right margin: metres from the tyre nearest each edge to it
+ *     (the tyre points of the one-tyre limit), / 10; negative once over the line
+ *   8..14 centre-line curvature 25, 50, 100, 150, 200, 300, 400 m ahead, as curvatureInput()
+ *   15 distance to the next corner (radius under 300 m) / 600 m; 1 when none within 600 m
+ *   16 that corner's sharpness: the strongest curvature in its first 150 m, as curvatureInput()
+ *   17 lap progress along the centre line (0..1, every metre, not every gate)
+ * The look-ahead reaches braking zones: at 340 km/h braking starts ~250 m before a corner.
+ */
+function observeExtended(b: i32): void {
+  unchecked((obs[b] = clamp(-car.r / 2.0, -1, 1)));
+  unchecked((obs[b + 1] = clamp(-Math.atan2(car.vy, Math.max(car.vx, 1.0)) / (Math.PI / 4), -1, 1)));
+  unchecked((obs[b + 2] = clamp(-car.vy / 10.0, -1, 1)));
+  unchecked((obs[b + 3] = stepRearSlide));
+  unchecked((obs[b + 4] = stepFrontSlide));
+  unchecked((obs[b + 5] = clamp(car.longAccel() / 50.0, -1, 1)));
+  const front = p(CG_TO_FRONT);
+  const rear = front - p(WHEELBASE);
+  const hw = p(WIDTH) * 0.5;
+  const c = Math.cos(car.yaw);
+  const s = Math.sin(car.yaw);
+  let left = Infinity;
+  let right = Infinity;
+  for (let k = 0; k < 4; k++) {
+    const fx = k < 2 ? front : rear;
+    const fy = k % 2 == 0 ? hw : -hw;
+    const px = car.x + fx * c - fy * s;
+    const py = car.y + fx * s + fy * c;
+    const i = track.nearestLocal(px, py, progressIdx, CORNER_WINDOW);
+    const off = track.lateralAt(i, px, py);
+    left = Math.min(left, track.widthLeftAt(i) - off);
+    right = Math.min(right, track.widthRightAt(i) + off);
+  }
+  unchecked((obs[b + 6] = clamp(left / 10.0, -1, 1)));
+  unchecked((obs[b + 7] = clamp(right / 10.0, -1, 1)));
+  const n = track.n;
+  for (let k = 0; k < LOOK_AHEAD_M.length; k++) {
+    unchecked((obs[b + 8 + k] = curvatureInput(curvatureAt((progressIdx + unchecked(LOOK_AHEAD_M[k])) % n))));
+  }
+  let dist = CORNER_SEARCH_M;
+  for (let d = 0; d <= CORNER_SEARCH_M; d += 5) {
+    if (Math.abs(curvatureAt((progressIdx + d) % n)) * CORNER_RADIUS_M > 1.0) {
+      dist = d;
+      break;
+    }
+  }
+  let sharp: f64 = 0;
+  if (dist < CORNER_SEARCH_M) {
+    for (let d = dist; d <= dist + 150; d += 5) {
+      const k = curvatureAt((progressIdx + d) % n);
+      if (Math.abs(k) > Math.abs(sharp)) sharp = k;
+    }
+  }
+  unchecked((obs[b + 15] = <f64>dist / <f64>CORNER_SEARCH_M));
+  unchecked((obs[b + 16] = curvatureInput(sharp)));
+  unchecked((obs[b + 17] = <f64>progressIdx / <f64>n));
 }
 
 // ---- reading state ----
 
 export function getObservation(i: i32): f64 {
-  assert(i >= 0 && i < rayCount + 4, "observation index out of range");
+  assert(i >= 0 && i < getObservationCount(), "observation index out of range");
   return unchecked(obs[i]);
 }
 export function getStatus(): i32 {
@@ -395,6 +627,8 @@ export function stateHash(): u64 {
   h = mix(h, <u64>status);
   h = mix(h, <u64>progressIdx);
   h = mix(h, <u64>nextGate);
+  // Only models with a carried slide state hash it, so drive-only (solo-1) hashes are unchanged.
+  if (car.rearSliding) h = mix(h, 1);
   return h;
 }
 

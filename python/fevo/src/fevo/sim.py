@@ -89,6 +89,10 @@ class Simulator:
         packed = self.rules.packed_car(self.setup)
         self.core.write_f64(packed)
         self.core.call("setCarParamsFromScratch", len(packed))
+        self.core.call("setRearSlideModel", *self.rules.rear_slide)
+        self.core.call("setTrackLimits", self.rules.track_limits)
+        self.core.call("setLowSpeedModel", self.rules.low_speed_model)
+        self.core.call("setObservationSet", self.rules.observation_set)
         self.core.call("setTiming", r["timing"]["agentHz"], r["timing"]["physicsSubsteps"])
         p = practice or Practice()
         self.core.call("setLimits", p.max_steps or r["timing"]["maxSteps"], float(r["timing"]["stopSpeedMps"]), r["timing"]["stopSteps"])
@@ -116,6 +120,8 @@ class Simulator:
 
     def load_program(self, program: Program) -> None:
         """Load an agent; its setup (if any) becomes the car's setup."""
+        if len(program.input_slots) != len(self.rules.observation):
+            raise ValueError(f"the agent takes {len(program.input_slots)} inputs; rules {self.rules.id} give {len(self.rules.observation)}")
         self.set_setup(program.setup)
         p = program.packed()
         self.core.write_i32(p["io"] + p["nodeInts"] + p["linkSlots"])

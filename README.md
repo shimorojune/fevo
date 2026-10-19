@@ -11,7 +11,7 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 | `apps/api` | The dashboard's API: tracks, published models and their benchmark laps, training runs and metrics, live events (SSE), username/password sign-in, a publish key for training. Re-runs a published model's clean official laps in the same sim.wasm and refuses it unless they match. Postgres via `DATABASE_URL`, embedded PGlite otherwise. Serves the built dashboard when `WEB_DIST` is set. `pnpm --filter @fevo/api dev` |
 | `apps/web` | The dashboard: Vite + React. Models, tracks, benchmarks, training and replays; laps run in a Web Worker on the same wasm. `pnpm --filter @fevo/web dev` |
 | `tools/publish` | `pnpm --filter @fevo/publish fevo …`: publish a model (runs its official laps on every track first), add a track, report a training run. Python training can report progress with `fevo.dashboard.Run`. |
-| `packages/rules` | Rules versions (solo-1): car params in SI units, timing, seeds, sensors. Single source of truth. |
+| `packages/rules` | Rules versions (solo-1 to solo-6): car params in SI units, timing, seeds, sensors. Single source of truth. |
 | `packages/branding` | Every team livery and circuit display name. Flip `BRANDING_MODE` to go generic everywhere. |
 | `packages/tracks` | Baked track file format; baked tracks land in `packages/tracks/data/`. |
 | `packages/sim-core` | AssemblyScript simulator compiled to one `sim.wasm` for browser, Node verifier and Python. Physics, sensors, laps and network evaluation. |

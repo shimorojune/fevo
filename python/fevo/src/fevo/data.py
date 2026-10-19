@@ -18,6 +18,19 @@ def manifest() -> dict[str, Any]:
     return _read("manifest.json")
 
 
+#: Rear tyre models under power; the index is the simulator's code (packages/rules/src/tyres.ts).
+REAR_SLIDE_MODELS = ["drive-only", "combined-slip"]
+#: Track limits; the index is the simulator's code (packages/rules/src/limits.ts).
+TRACK_LIMITS = ["all-corners", "one-tyre"]
+LOW_SPEED_MODELS = ["forward-speed", "total-speed"]
+#: The extended observation's names after the standard ones (packages/rules/src/observation.ts).
+EXTENDED_OBSERVATION = ["yaw_rate", "body_slip", "lateral_velocity", "rear_slide", "front_slide", "long_accel",
+                        "left_margin", "right_margin", "curvature_25", "curvature_50", "curvature_100", "curvature_150",
+                        "curvature_200", "curvature_300", "curvature_400", "next_corner_distance", "next_corner_sharpness",
+                        "progress_m"]
+MEMORY_OBSERVATION = ["prev_steer", "prev_throttle", "d_speed", "d_yaw_rate", "d_offset", "d_heading"]
+
+
 @dataclass(frozen=True)
 class Rules:
     """One rules version, exactly as the website enforces it."""
@@ -63,6 +76,35 @@ class Rules:
             for e in k["effects"]:
                 car[e["param"]] = car[e["param"]] + e["perUnit"] * (v - k["default"])
         return car
+
+    @property
+    def rear_slide(self) -> tuple[int, float]:
+        """The simulator's (model, sliding mu) for the rear tyres under power. No `tyres` block (solo-1) is drive-only."""
+        t = self.raw.get("tyres") or {"rearSlide": "drive-only", "rearSlideMu": 1.0}
+        return REAR_SLIDE_MODELS.index(t["rearSlide"]), float(t["rearSlideMu"])
+
+    @property
+    def track_limits(self) -> int:
+        """The simulator's track-limits code. No `trackLimits` (solo-1, solo-2) means all four corners inside."""
+        return TRACK_LIMITS.index(self.raw.get("trackLimits", "all-corners"))
+
+    @property
+    def low_speed_model(self) -> int:
+        """The simulator's low-speed-model code. No `lowSpeed` (solo-1 to solo-4) means forward-speed."""
+        return LOW_SPEED_MODELS.index(self.raw.get("lowSpeed", "forward-speed"))
+
+    @property
+    def observation_set(self) -> int:
+        """The simulator's observation-set code: 0 standard (rays, speed, progress, offset, heading), 1 extended, 2 memory."""
+        standard = self.raw["sensors"]["rayCount"] + 4
+        extra = self.observation[standard:]
+        if not extra:
+            return 0
+        if extra == EXTENDED_OBSERVATION:
+            return 1
+        if extra == EXTENDED_OBSERVATION + MEMORY_OBSERVATION:
+            return 2
+        raise ValueError(f"unknown observation set {self.observation}")
 
     def packed_car(self, setup: list[float] | None) -> list[float]:
         car = self.car_for(setup)

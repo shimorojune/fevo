@@ -10,6 +10,7 @@
     --grass: #e9eadf; --asphalt: #3b3b3e; --edge: #ffffff; --gate: rgba(127,178,255,.35);
     --start: #e5484d; --accent: #2563eb; --trail: rgba(37,99,235,.55);
     --speed: #2563eb; --throttle: #16a34a; --brake: #dc2626; --steer: #7c3aed;
+    --ms-purple: #a855f7; --ms-green: #16a34a; --ms-yellow: #eab308;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #141413; --panel: #1e1e1d; --fg: #ecebe8; --muted: #9b9a97; --line: #2e2e2c;
@@ -38,6 +39,11 @@
   td, th { padding: 4px 12px; text-align: left; border-top: 1px solid var(--line); } th { color: var(--muted); font-weight: 500; }
   .hint { color: var(--muted); font-size: 12px; }
   .row { display: flex; gap: 8px; align-items: center; }
+  .ms { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; padding: 4px 12px 8px; }
+  .ms i { height: 14px; border-radius: 2px; background: var(--line); outline-offset: 1px; }
+  .sectors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0 12px 12px; font-variant-numeric: tabular-nums; }
+  .sectors div { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+  .sectors b { display: block; font-size: 16px; }
 </style>
 </head>
 <body>
@@ -69,6 +75,9 @@
         <div class="k hint">Throttle / brake</div><div class="bar"><i id="thr"></i></div>
         <div class="k hint" style="margin-top:8px">Steer (left − / right +)</div><div class="bar"><i id="str"></i></div>
       </div>
+      <div class="k hint" style="padding:0 12px">Mini sectors: <span style="color:var(--ms-purple)">purple</span> faster than every other lap on this page, <span style="color:var(--ms-green)">green</span> faster than this driver's other laps, <span style="color:var(--ms-yellow)">yellow</span> otherwise (a tie is not an improvement)</div>
+      <div class="ms" id="ms"></div>
+      <div class="sectors" id="sectors"></div>
       <div class="meta" id="meta"></div>
       <table id="official"></table>
     </div>
@@ -104,6 +113,52 @@ for (const t of DATA.tracks) {
   for (const [x, y] of [...L, ...Rr]) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
   geo[t.id] = { t, left, right, centre, surface, gates, start, bounds: { minX, minY, maxX, maxY } };
 }
+
+// ---------- mini sectors (F1 colours) ----------
+// 24 mini sectors from the gates (4–5 gates each), three sectors of 8. A mini sector ends when the car
+// crosses its boundary gate, timed within the step as F1 timing does (the gate line's crossing point between
+// the two positions either side of it); the last one ends at the official finish step, so the three sectors
+// add up to the lap time.
+const MS = 24, MS_PER_SECTOR = 8;
+const msBounds = (G) => Array.from({ length: MS - 1 }, (_, i) => Math.round(((i + 1) * G) / MS));
+/** Fraction of step j at which the car crossed gate gi. The simulator counts a gate once the car's nearest
+ *  centre-line point reaches it: on the line across the track halfway between point gi - 1 and point gi. */
+function crossFraction(t, gi, x0, y0, x1, y1) {
+  const c = t.centerline, n = t.widthLeft.length, a = (gi - 1 + n) % n;
+  let tx = c[2*gi] - c[2*a], ty = c[2*gi+1] - c[2*a+1]; const len = Math.hypot(tx, ty); tx /= len; ty /= len;
+  const mx = (c[2*a] + c[2*gi]) / 2, my = (c[2*a+1] + c[2*gi+1]) / 2;
+  const s0 = (x0 - mx) * tx + (y0 - my) * ty, s1 = (x1 - mx) * tx + (y1 - my) * ty;
+  return s1 > s0 ? Math.min(1, Math.max(0, -s0 / (s1 - s0))) : 1;
+}
+/** Time (in steps, fractional) at which each mini sector ends, completed ones only. */
+function msEnds(l, t, bounds) {
+  const ends = [];
+  for (let j = 1, k = 0; j < l.gates.length && k < bounds.length; j++)
+    while (k < bounds.length && l.gates[j] >= bounds[k]) { ends.push(j - 1 + crossFraction(t, t.gates[bounds[k]], l.x[j-1], l.y[j-1], l.x[j], l.y[j])); k++; }
+  if (l.status === "finished" && ends.length === bounds.length) ends.push(l.steps);
+  return ends;
+}
+const msTimes = (ends) => ends.map((e, k) => e - (k ? ends[k - 1] : 0));
+const secTimes = (t) => [0, 1, 2].map((s) => (t.length >= (s + 1) * MS_PER_SECTOR ? t.slice(s * MS_PER_SECTOR, (s + 1) * MS_PER_SECTOR).reduce((a, b) => a + b, 0) : null));
+// As in F1, matching a time is not an improvement: purple only when strictly faster than every other lap on
+// the page, green only when strictly faster than this driver's own other laps, otherwise yellow.
+const msColour = (t, othersBest, ownBest) => (t < othersBest ? "purple" : t < ownBest ? "green" : "yellow");
+for (const t of DATA.tracks) {
+  // Track segment for each mini sector, along the centre line.
+  const n = t.widthLeft.length, c = t.centerline, b = msBounds(t.gates.length);
+  const startIdx = [t.gates[0], ...b.map((k) => t.gates[k])], endIdx = [...b.map((k) => t.gates[k]), t.gates[0] + n];
+  geo[t.id].ms = startIdx.map((a, k) => { const p = new Path2D(); for (let i = a; i <= endIdx[k]; i++) { const q = i % n; i === a ? p.moveTo(c[2*q], c[2*q+1]) : p.lineTo(c[2*q], c[2*q+1]); } return p; });
+  geo[t.id].msBounds = b;
+}
+for (const l of DATA.laps) { l.msEnds = msEnds(l, geo[l.circuitId].t, geo[l.circuitId].msBounds); l.msTimes = msTimes(l.msEnds); l.secTimes = secTimes(l.msTimes); }
+// Each lap against the other laps on the page (same circuit): every other driver, and this driver's other laps.
+for (const l of DATA.laps) {
+  const others = DATA.laps.filter((o) => o !== l && o.circuitId === l.circuitId), own = others.filter((o) => o.agent === l.agent);
+  const best = (laps, key, k) => Math.min(Infinity, ...laps.map((o) => o[key][k] ?? Infinity));
+  l.msCols = l.msTimes.map((t, k) => msColour(t, best(others, "msTimes", k), best(own, "msTimes", k)));
+  l.secCols = l.secTimes.map((t, k) => (t == null ? null : msColour(t, best(others, "secTimes", k), best(own, "secTimes", k))));
+}
+for (let k = 0; k < MS; k++) document.getElementById("ms").appendChild(document.createElement("i"));
 
 // ---------- state ----------
 const circuits = [...new Set(DATA.laps.map((l) => l.circuitId))];
@@ -194,13 +249,17 @@ function drawMain() {
   ctx.lineWidth = 0.3; ctx.strokeStyle = css("--edge"); ctx.stroke(g.left); ctx.stroke(g.right);
   ctx.lineWidth = 0.15; ctx.strokeStyle = css("--gate"); ctx.stroke(g.gates);
   ctx.lineWidth = 0.6; ctx.strokeStyle = css("--start"); ctx.stroke(g.start);
+  // Completed mini sectors, coloured as F1 timing does.
+  ctx.globalAlpha = 0.45; ctx.lineWidth = 2.2;
+  lap.msEnds.forEach((e, k) => { if (e > frame) return; ctx.strokeStyle = css(`--ms-${lap.msCols[k]}`); ctx.stroke(g.ms[k]); });
+  ctx.globalAlpha = 1;
   // Trail: the last 6 seconds.
   ctx.beginPath();
   const from = Math.max(0, Math.floor(frame) - 6 * HZ);
   for (let i = from; i <= Math.floor(frame); i++) i === from ? ctx.moveTo(lap.x[i], lap.y[i]) : ctx.lineTo(lap.x[i], lap.y[i]);
   ctx.lineTo(x, y); ctx.strokeStyle = css("--trail"); ctx.lineWidth = 0.35; ctx.stroke();
   // Skid marks: every sliding wheel over the last 20 seconds leaves a dark streak.
-  const fi = Math.floor(f);
+  const fi = Math.floor(frame);
   for (let i = Math.max(1, fi - 20 * HZ); i <= fi; i++) {
     const kf = slideAt(lap.frontSlide, i), kr = slideAt(lap.rearSlide, i);
     if (kf <= 0 && kr <= 0) continue;
@@ -225,6 +284,7 @@ function drawMain() {
 function drawMap() {
   const cv = $("map"), ctx = cv.getContext("2d"), d = fit(cv);
   const W = cv.width, H = cv.height, b = g.bounds, pad = 12 * d;
+  if (W <= 2 * pad || H <= 2 * pad) return;  // not laid out yet (hidden or resizing): nothing to draw
   const s = Math.min((W - 2 * pad) / (b.maxX - b.minX), (H - 2 * pad) / (b.maxY - b.minY));
   const ox = (W - (b.maxX - b.minX) * s) / 2 - b.minX * s, oy = (H + (b.maxY - b.minY) * s) / 2 + b.minY * s;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H);
@@ -279,6 +339,17 @@ function hud() {
   const ts = tyreState(Math.min(i, lap.x.length - 1));
   $("tyres").textContent = ts.label || "gripping";
   $("tyres").style.color = ts.label ? (ts.f > 0 ? "#2f8fd6" : ts.rearColor === SPIN ? "#d9622b" : "#2f8fd6") : "";
+  [...$("ms").children].forEach((cell, k) => {
+    const done = k < lap.msEnds.length && lap.msEnds[k] <= frame;
+    cell.style.background = done ? css(`--ms-${lap.msCols[k]}`) : "";
+    cell.style.outline = !done && (k === 0 || (lap.msEnds[k - 1] ?? Infinity) <= frame) && !(done || i >= lap.steps) ? `2px solid ${css("--fg")}` : "";
+    cell.title = done ? `mini sector ${k + 1}: ${(lap.msTimes[k] / HZ).toFixed(3)} s` : `mini sector ${k + 1}`;
+  });
+  $("sectors").innerHTML = lap.secTimes.map((v, k) => {
+    const done = v != null && lap.msEnds[(k + 1) * MS_PER_SECTOR - 1] <= frame;
+    const col = done ? css(`--ms-${lap.secCols[k]}`) : "";
+    return `<div><span class="hint">S${k + 1}</span><b style="color:${col}">${done ? (v / HZ).toFixed(3) + " s" : "–"}</b></div>`;
+  }).join("");
   const t = Math.max(-1, Math.min(1, lap.throttle[i])), s = Math.max(-1, Math.min(1, lap.steer[i]));
   Object.assign($("thr").style, { left: t >= 0 ? "50%" : `${50 + t * 50}%`, width: `${Math.abs(t) * 50}%`, background: t >= 0 ? css("--throttle") : css("--brake") });
   Object.assign($("str").style, { left: s >= 0 ? "50%" : `${50 + s * 50}%`, width: `${Math.abs(s) * 50}%`, background: css("--steer") });
@@ -290,8 +361,7 @@ function tick(now) {
     frame += dt * HZ * Number($("rate").value);
     if (frame >= lap.steps) { frame = lap.steps; playing = false; $("play").textContent = "Play"; }
   }
-  drawMain(); drawMap(); drawTelemetry(); hud();
-  requestAnimationFrame(tick);
+  try { drawMain(); drawMap(); drawTelemetry(); hud(); } finally { requestAnimationFrame(tick); }
 }
 
 const setPlaying = (p) => { playing = p; if (p && frame >= lap.steps) frame = 0; $("play").textContent = p ? "Pause" : "Play"; };

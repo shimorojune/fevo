@@ -152,11 +152,12 @@ def neat_to_json(genome: Any, config: Any, setup: dict[str, float] | None = None
 _RULES_SETUP = object()
 
 
-def from_json(text: str, inputs: int = 15, outputs: int = 2, setup_knobs: Any = _RULES_SETUP) -> Program:
+def from_json(text: str, inputs: int | None = None, outputs: int = 2, setup_knobs: Any = _RULES_SETUP) -> Program:
     """Validate and compile an uploaded-format JSON agent, like the website does.
 
     The setup block is checked against the current rules' knobs (pass setup_knobs=None for
-    a rules version without setups)."""
+    a rules version without setups). Without `inputs`, an MLP's first layer sets it (15, 33 or 39)
+    and a genome takes the standard 15; the simulator checks it against the rules when loaded."""
     if setup_knobs is _RULES_SETUP:
         from .data import load_rules
 
@@ -168,8 +169,11 @@ def from_json(text: str, inputs: int = 15, outputs: int = 2, setup_knobs: Any = 
     except json.JSONDecodeError as e:
         raise AgentError("invalid_json", f"This file isn't valid JSON. Line {e.lineno}, column {e.colno}: {e.msg}.") from None
     if isinstance(data, dict) and isinstance(data.get("nodes"), list) and isinstance(data.get("connections"), list):
-        return _with_setup(_compile_genome(data, inputs, outputs), data, setup_knobs)
+        return _with_setup(_compile_genome(data, inputs or 15, outputs), data, setup_knobs)
     if isinstance(data, dict) and isinstance(data.get("layers"), list):
+        if inputs is None:
+            first = data["layers"][0] if data["layers"] else None
+            inputs = first if isinstance(first, int) and first in (15, 33, 39) else 15
         return _with_setup(_compile_mlp(data, inputs, outputs), data, setup_knobs)
     raise AgentError("unknown_format", "This doesn't look like a NEAT genome or an MLP.")
 

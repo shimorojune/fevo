@@ -133,3 +133,76 @@ test("full throttle from a standstill spins the rears", () => {
   }
   assert.ok(spin > 0);
 });
+
+/**
+ * Settle in a 200 km/h corner, floor it for `floorSteps`, ease to half
+ * throttle, then lift: rear slide after each phase and the largest body slip.
+ */
+function powerInACorner(model: number, floorSteps: number) {
+  sim.setRearSlideModel(model, model ? 0.9 : 1);
+  try {
+    sim.reset(0, 0, 0, 55);
+    for (let i = 0; i < 3 * HZ; i++) sim.step(0.2, Math.max(0, Math.min(1, (55 - sim.getVx()) * 2)));
+    let maxSlipDeg = 0;
+    const slip = () => (maxSlipDeg = Math.max(maxSlipDeg, Math.abs((Math.atan2(sim.getVy(), sim.getVx()) * 180) / Math.PI)));
+    for (let i = 0; i < floorSteps; i++) {
+      sim.step(0.2, 1);
+      slip();
+    }
+    const floored = sim.getRearSlide();
+    const eased: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      sim.step(0.2, 0.5);
+      eased.push(sim.getRearSlide());
+      slip();
+    }
+    const hash = sim.stateHash();
+    sim.step(0, 0);
+    const lifted = sim.getRearSlide();
+    for (let i = 0; i < 90; i++) {
+      sim.step(0, 0);
+      slip();
+    }
+    return { floored, eased, lifted, maxSlipDeg, hash };
+  } finally {
+    sim.setRearSlideModel(0, 1);
+  }
+}
+
+test("solo-1 rears (drive-only) stay hooked up when power goes down mid-corner at speed", () => {
+  for (const n of [4, 30]) {
+    const r = powerInACorner(0, n);
+    assert.equal(r.floored, 0);
+    assert.ok(r.eased.every((s) => s === 0));
+    assert.ok(r.maxSlipDeg < 5, `body slip ${r.maxSlipDeg.toFixed(1)} deg`);
+  }
+});
+
+test("solo-2 rears (combined slip): a stab of power breaks them away, half throttle keeps it sliding, a lift catches it", () => {
+  const r = powerInACorner(1, 4);
+  assert.ok(r.floored > 0.2, `floored ${r.floored}`);
+  assert.ok(
+    r.eased.every((s) => s > 0),
+    `half throttle still slides: ${r.eased.map((s) => s.toFixed(2)).join(" ")}`,
+  );
+  assert.equal(r.lifted, 0);
+  assert.ok(r.maxSlipDeg < 10, `caught at ${r.maxSlipDeg.toFixed(1)} deg body slip`);
+});
+
+test("solo-2: holding full power mid-corner spins the car", () => {
+  const r = powerInACorner(1, 30);
+  assert.ok(r.maxSlipDeg > 45, `body slip ${r.maxSlipDeg.toFixed(1)} deg`);
+});
+
+test("the carried slide is in the state hash, and switching back to drive-only is exactly solo-1", () => {
+  const solo1 = powerInACorner(0, 4).hash;
+  assert.notEqual(powerInACorner(1, 4).hash, solo1);
+  assert.equal(powerInACorner(0, 4).hash, solo1);
+});
+
+test("the wasm rejects unknown rear slide models and exits", () => {
+  assert.throws(() => sim.setRearSlideModel(2, 0.9));
+  assert.throws(() => sim.setRearSlideModel(1, 0));
+  assert.throws(() => sim.setRearSlideModel(1, 1.5));
+  sim.setRearSlideModel(0, 1);
+});

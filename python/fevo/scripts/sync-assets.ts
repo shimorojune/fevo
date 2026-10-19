@@ -8,7 +8,8 @@ import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } fro
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CIRCUITS, TEAMS } from "@fevo/branding";
-import { CAR_PARAM_ORDER, SOLO_1, packCarParams } from "@fevo/rules";
+import { ALL_RULES, CAR_PARAM_ORDER, SOLO_1, packCarParams } from "@fevo/rules";
+import { SIM_VERSION } from "@fevo/sim-core";
 import { qssLap, racingLine } from "../../../tools/calibrate/src/line.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -40,11 +41,16 @@ for (const f of readdirSync(tracksDir).filter((f) => f.endsWith(".track.json")))
   );
 }
 
-const rules = { ...SOLO_1, carParamOrder: CAR_PARAM_ORDER, carParamsPacked: Array.from(packCarParams(SOLO_1.car)) };
-writeFileSync(join(out, "rules", `${SOLO_1.id}.json`), JSON.stringify(rules, null, 1) + "\n");
+for (const r of ALL_RULES) {
+  const rules = { ...r, carParamOrder: CAR_PARAM_ORDER, carParamsPacked: Array.from(packCarParams(r.car)) };
+  writeFileSync(join(out, "rules", `${r.id}.json`), JSON.stringify(rules, null, 1) + "\n");
+}
 writeFileSync(join(out, "branding.json"), JSON.stringify({ teams: TEAMS, circuits: CIRCUITS }, null, 1) + "\n");
 copyFileSync(viewer, join(out, "viewer.html"));
 
-const manifest = { simVersion: SOLO_1.simVersion, rules: [SOLO_1.id], wasmSha256: wasmSha, tracks };
+// The simulator's own version (major * 10000 + minor * 100 + patch), not a rules version's minimum.
+const v = SIM_VERSION.value;
+const simVersion = `${Math.floor(v / 10000)}.${Math.floor(v / 100) % 100}.${v % 100}`;
+const manifest = { simVersion, rules: ALL_RULES.map((r) => r.id), wasmSha256: wasmSha, tracks };
 writeFileSync(join(out, "manifest.json"), JSON.stringify(manifest, null, 1) + "\n");
-console.log(`synced sim.wasm ${wasmSha.slice(0, 12)}, ${Object.keys(tracks).length} tracks, rules ${SOLO_1.id}`);
+console.log(`synced sim.wasm ${wasmSha.slice(0, 12)} (${simVersion}), ${Object.keys(tracks).length} tracks, rules ${manifest.rules.join(", ")}`);
