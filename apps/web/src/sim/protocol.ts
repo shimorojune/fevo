@@ -1,22 +1,22 @@
-import type { AgentError } from "@fevo/agent-format";
 import type { LapResult } from "@fevo/sim";
 
-export interface AgentSummary {
-  kind: "neat-genome" | "mlp";
-  nodes: number;
-  connections: number;
-  parameters: number;
-  fingerprint: string;
-  bytes: number;
-  /** Setup values in the rules' knob order. */
-  setup: number[];
+/** One lap to drive in the worker: the model, and optionally a ghost model on the same seed. */
+export interface DriveRequest {
+  id: number;
+  type: "drive";
+  rulesId: string;
+  trackId: string;
+  seed: number;
+  errorLevel: number;
+  noiseSeed: number;
+  agentText: string;
+  ghostAgentText?: string | undefined;
+  ghostRulesId?: string | undefined;
 }
 
-export type Request = { id: number; type: "run"; trackId: string; agentText: string };
+export type Request = DriveRequest;
 
 export type Response =
-  | { id: number; type: "checked"; ok: true; summary: AgentSummary; ms: number }
-  | { id: number; type: "checked"; ok: false; errors: AgentError[]; ms: number }
-  | { id: number; type: "lap"; lap: LapResult }
-  | { id: number; type: "done"; medianSteps: number | null; ranked: boolean }
+  | { id: number; type: "lap"; who: "model" | "ghost"; lap: LapResult }
+  | { id: number; type: "done" }
   | { id: number; type: "failed"; message: string };

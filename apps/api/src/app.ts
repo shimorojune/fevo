@@ -207,7 +207,7 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
     if (typeof modelId !== "string" || typeof trackId !== "string") return bad(c, "modelId and trackId are required.");
     if (!Number.isInteger(seed) || (seed as number) < 0) return bad(c, "seed must be a whole number from 0.");
     if (typeof errorLevel !== "number" || !(errorLevel >= 0 && errorLevel <= 1)) return bad(c, "errorLevel must be between 0 and 1.");
-    if (!Number.isInteger(noiseSeed)) return bad(c, "noiseSeed must be a whole number.");
+    if (!Number.isInteger(noiseSeed) || (noiseSeed as number) < 0 || (noiseSeed as number) >= 2 ** 31) return bad(c, "noiseSeed must be a whole number from 0 to 2^31 - 1.");
     if (ghostModelId !== undefined && ghostModelId !== null && typeof ghostModelId !== "string") return bad(c, "ghostModelId must be a model id.");
     if (typeof status !== "string" || !["finished", "crashed", "stopped", "timed-out", "error"].includes(status)) return bad(c, "status must be a lap result.");
     if (!Number.isInteger(steps) || (steps as number) < 0 || !Number.isInteger(gatesPassed) || (gatesPassed as number) < 0) return bad(c, "steps and gatesPassed must be whole numbers.");

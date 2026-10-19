@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * fevo design tokens (the "fevo" design system): quiet surfaces, ink and hairlines, colour only for data.
+ * shadcn/ui reads the shadcn names; lib/replay.ts reads the scene names and the aliases at the end.
+ */
+:root {
+  --radius: 12px;
+  --background: #ffffff;
+  --foreground: #111113;
+  --muted-foreground: #6b6b72;
+  --muted: #f4f4f3;
+  --border: #ececec;
+  --grid: #efefee;
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --popover: #ffffff;
+  --popover-foreground: var(--foreground);
+  --primary: var(--foreground);
+  --primary-foreground: var(--background);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--muted);
+  --accent-foreground: var(--foreground);
+  --input: var(--border);
+  --ring: var(--foreground);
+  --selected: #eaf0fd;
+  --driver-a: #2463eb;
+  --driver-b: #e2580b;
+  --success: #157f4c;
+  --destructive: #c8322a;
+  --sector-purple: #9b30ff;
+  --sector-purple-text: #9b30ff;
+  --sector-green: #00c853;
+  --sector-yellow: #ffd600;
+  --speed-0: #0d0887;
+  --speed-1: #5b02a3;
+  --speed-2: #9a179b;
+  --speed-3: #cb4678;
+  --speed-4: #eb7852;
+  --speed-5: #fbb32f;
+  --speed-6: #f0f921;
+  --scene-grass: #e6e9e2;
+  --scene-asphalt: #3b3e44;
+  --scene-edge: #ffffff;
+  --scene-ghost-fill: #ffffff;
+  --map-surface: #c9ced6;
+  --start-line: var(--success);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --background: #0f0f10;
+  --foreground: #ececea;
+  --muted-foreground: #8e8e94;
+  --muted: #18181a;
+  --border: #222224;
+  --grid: #1c1c1e;
+  --popover: #18181a;
+  --selected: #18213a;
+  --driver-a: #6b9bff;
+  --driver-b: #ff8f4d;
+  --success: #7cc89b;
+  --destructive: #ff6b5e;
+  --sector-purple-text: #b46bff;
+  --scene-grass: #141a14;
+  --scene-asphalt: #2c3139;
+  --scene-edge: #d7dce3;
+  --scene-ghost-fill: #eef1f5;
+  --map-surface: #2c3646;
+  color-scheme: dark;
+}
+@theme inline {
+  --font-sans: "Geist", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, Menlo, monospace;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-grid: var(--grid);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-selected: var(--selected);
+  --color-driver-a: var(--driver-a);
+  --color-driver-b: var(--driver-b);
+  --color-success: var(--success);
+  --color-destructive: var(--destructive);
+  --color-sector-purple: var(--sector-purple);
+  --color-sector-purple-text: var(--sector-purple-text);
+  --color-sector-green: var(--sector-green);
+  --color-sector-yellow: var(--sector-yellow);
+  --color-speed-0: var(--speed-0);
+  --color-speed-3: var(--speed-3);
+  --color-speed-6: var(--speed-6);
+  --animate-rise: rise 260ms cubic-bezier(.2, .8, .2, 1) both;
+  --animate-fade: fade 180ms cubic-bezier(.2, .8, .2, 1) both;
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes fade { from { opacity: 0; } }
+}
+
+@layer base {
+  * { @apply border-border outline-ring; }
+  html, body, #root { height: 100%; }
+  body { @apply bg-background text-foreground font-sans text-sm antialiased; font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+/* Desktop: one screen, the page never scrolls; panels scroll inside themselves. */
+@media (min-width: 981px) and (min-height: 621px) { html, body { overflow: hidden; } }
+@media (max-width: 980px), (max-height: 620px) { html { scrollbar-gutter: stable; } }
+html { scrollbar-color: color-mix(in srgb, var(--muted-foreground) 50%, transparent) var(--background); }
+
+@utility scroll-panel {
+  overflow: auto;
+  min-height: 0;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  &:hover, &:focus-within { scrollbar-color: color-mix(in srgb, var(--muted-foreground) 50%, transparent) transparent; }
+}
+
+/* Theme switch: a circular reveal from the switch (view transitions), a cross-fade elsewhere. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html.theming, html.theming * { transition: background-color .28s ease, color .28s ease, border-color .28s ease, fill .28s, stroke .28s !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+}
+@keyframes menuin { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+
+/* F1 timing colours. Same in both themes, as on a timing screen. */
+.f1-p { background: var(--sector-purple); color: #fff; }
+.f1-g { background: var(--sector-green); color: #0b0b0b; }
+.f1-y { background: var(--sector-yellow); color: #0b0b0b; }
+.f1-dash.now { background: var(--foreground); opacity: .35; animation: f1blink 1s ease-in-out infinite; }
+.f1-set { animation: f1set .35s cubic-bezier(.2,.8,.2,1); }
+@keyframes f1blink { 50% { opacity: .12; } }
+@keyframes f1set { from { transform: scale(.9); opacity: .4; } }
+
+/* Traces in the dock, drawn like F1 telemetry: two drivers against distance, corners marked. */
+.chart svg { display: block; width: 100%; touch-action: none; }
+.chart .t { fill: var(--foreground); font: 500 11.5px var(--font-sans); }
+.chart .u { fill: var(--muted-foreground); font: 11px var(--font-sans); }
+.chart .ax { fill: var(--muted-foreground); font: 10px var(--font-mono); }
+.chart .gl { stroke: var(--grid); }
+.chart .zero { stroke: var(--muted-foreground); opacity: .6; }
+.chart .corner { stroke: var(--muted-foreground); stroke-dasharray: 2 3; opacity: .5; }
+.chart .cl { fill: var(--muted-foreground); font: 500 10px var(--font-sans); }
+.chart .sa { fill: none; stroke: var(--driver-a); stroke-width: 1.5; }
+.chart .sb { fill: none; stroke: var(--driver-b); stroke-width: 1.5; }
+.chart .fa { fill: var(--driver-a); opacity: .14; }
+.chart .fb { fill: var(--driver-b); opacity: .14; }
+.chart .cross { stroke: var(--foreground); }

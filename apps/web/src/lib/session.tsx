@@ -19,7 +19,7 @@ export function SessionProvider({ children, fallback }: { children: ReactNode; f
       (e: Error) => (e instanceof ApiError && e.status === 401 ? setUser(null) : setError(e.message)),
     );
   }, []);
-  if (error) return <div className="wrap page error-box">Couldn't reach the fevo API: {error}</div>;
+  if (error) return <div className="p-6 text-destructive">Couldn't reach the fevo API: {error}</div>;
   if (user === undefined) return fallback;
   const session: Session = {
     user,

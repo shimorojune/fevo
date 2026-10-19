@@ -78,6 +78,33 @@ export interface RunDetail extends TrainingRun {
   models: { id: string; name: string; status: ModelStatus; createdAt: string }[];
 }
 
+/** A lap run from the Run screen and kept for History. */
+export interface Drive {
+  id: number;
+  modelId: string;
+  trackId: string;
+  rulesId: string;
+  simSha256: string;
+  seed: number;
+  errorLevel: number;
+  noiseSeed: number;
+  ghostModelId: string | null;
+  status: string;
+  steps: number;
+  gatesPassed: number;
+  hash: string;
+  sectorEnds: number[] | null;
+  verified: boolean;
+  createdBy: string;
+  createdAt: string;
+  lapTime: string | null;
+}
+
+export type NewDrive = Pick<Drive, "modelId" | "trackId" | "seed" | "errorLevel" | "noiseSeed" | "status" | "steps" | "gatesPassed" | "hash"> & {
+  ghostModelId?: string;
+  sectorEnds?: number[];
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -106,6 +133,12 @@ export const api = {
   track: (id: string) => call<TrackSummary & { data: TrackFile }>(`/api/tracks/${encodeURIComponent(id)}`),
   runs: () => call<{ runs: TrainingRun[] }>("/api/runs").then((r) => r.runs),
   run: (id: string) => call<RunDetail>(`/api/runs/${encodeURIComponent(id)}`),
+  drives: (f: { model?: string; track?: string; status?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)]));
+    return call<{ drives: Drive[] }>(`/api/drives${q.size ? `?${q}` : ""}`).then((r) => r.drives);
+  },
+  drive: (id: number) => call<Drive>(`/api/drives/${id}`),
+  saveDrive: (d: NewDrive) => call<Drive>("/api/drives", { method: "POST", body: JSON.stringify(d) }),
   updateRun: (id: string, patch: { status?: RunStatus; notes?: string | null }) =>
     call<TrainingRun>(`/api/runs/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
 };

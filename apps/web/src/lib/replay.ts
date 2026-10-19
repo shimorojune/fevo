@@ -141,14 +141,14 @@ function palette(): Palette {
     grass: v("--scene-grass"),
     asphalt: v("--scene-asphalt"),
     edge: v("--scene-edge"),
-    gate: alpha(v("--info"), 0.3),
-    start: v("--accent"),
-    trail: alpha(v("--info"), 0.7),
-    fg: v("--fg"),
-    muted: v("--muted"),
-    speed: v("--info"),
-    throttle: v("--ok"),
-    brake: v("--bad"),
+    gate: alpha(v("--driver-a"), 0.3),
+    start: v("--start-line"),
+    trail: alpha(v("--driver-a"), 0.7),
+    fg: v("--foreground"),
+    muted: v("--muted-foreground"),
+    speed: v("--driver-a"),
+    throttle: v("--success"),
+    brake: v("--destructive"),
     mapSurface: v("--map-surface"),
     ghostFill: v("--scene-ghost-fill"),
   };
@@ -373,7 +373,7 @@ export function drawMain(cv: HTMLCanvasElement, v: MainView): void {
   const m = v.zoom > 12 ? 10 : 20;
   ctx.fillStyle = PALETTE.fg;
   ctx.fillRect(16, H / d - 20, m * v.zoom, 2);
-  ctx.font = '12px "JetBrains Mono", ui-monospace, monospace';
+  ctx.font = '12px "Geist Mono", ui-monospace, Menlo, monospace';
   ctx.fillText(`${m} m`, 16, H / d - 26);
 }
 
@@ -458,7 +458,7 @@ export function drawTelemetry(cv: HTMLCanvasElement, trace: LapTrace, frame: num
   ctx.lineWidth = 1.5 * d;
   ctx.stroke();
   ctx.fillStyle = PALETTE.muted;
-  ctx.font = `${11 * d}px "JetBrains Mono", ui-monospace, monospace`;
+  ctx.font = `${11 * d}px "Geist Mono", ui-monospace, Menlo, monospace`;
   ctx.fillText(`Speed, peak ${Math.round(vmax * 3.6)} km/h · throttle green · brake red · ticks: lock-up blue, wheelspin orange`, 8 * d, 14 * d);
   const xp = (Math.min(frame, n - 1) / (n - 1)) * W;
   ctx.fillStyle = PALETTE.fg;
