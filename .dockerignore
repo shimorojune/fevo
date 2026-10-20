@@ -1,0 +1,6 @@
+**/node_modules
+**/dist
+**/.turbo
+.git
+python/fevo/.venv
+tools/track-builder/data/tumftm/*.csv

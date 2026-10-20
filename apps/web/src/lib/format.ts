@@ -1,3 +1,4 @@
+import { circuitBrand } from "@fevo/branding";
 import { SOLO_1 as R } from "@fevo/rules";
 
 export const HZ = R.timing.agentHz;
@@ -23,3 +24,14 @@ export const STATUS_LABEL: Record<string, string> = {
   error: "Error",
   "timed-out": "Timed out",
 };
+
+/** Display name for a track: the API's name, else the branded name for baked circuits, else the id. */
+export function trackName(id: string, tracks?: readonly { id: string; name: string }[]): string {
+  const t = tracks?.find((x) => x.id === id);
+  if (t) return t.name;
+  try {
+    return circuitBrand(id).name;
+  } catch {
+    return id;
+  }
+}

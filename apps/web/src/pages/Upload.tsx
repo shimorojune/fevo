@@ -1,18 +1,18 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { CIRCUITS, circuitBrand } from "@fevo/branding";
 import { MAX_FILE_BYTES } from "@fevo/agent-format";
 import { SOLO_1 as R } from "@fevo/rules";
 import { LapsTable } from "../components/Laps";
 import { SetupSummary } from "../components/SetupSummary";
-import { SubmitPanel } from "../components/Submit";
 import { useAgents, type Agent } from "../lib/agents";
+import { api, useApi } from "../lib/api";
 import { lapTime } from "../lib/format";
 import { useRun } from "../sim/useRun";
 
 export function Upload() {
   const [params, setParams] = useSearchParams();
   const circuitId = params.get("circuit") ?? "spielberg";
+  const tracks = useApi(api.tracks, "tracks");
   const { add } = useAgents();
   const navigate = useNavigate();
   const [agent, setAgent] = useState<Agent>();
@@ -42,20 +42,20 @@ export function Upload() {
   return (
     <div className="wrap page" style={{ maxWidth: 960 }}>
       <div className="stack" style={{ gap: 8 }}>
-        <h1>Upload an agent</h1>
+        <h1>Run a local file</h1>
         <div className="row small muted">
           <label className="row">
             Circuit
             <select value={circuitId} onChange={(e) => setParams({ circuit: e.target.value })}>
-              {CIRCUITS.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {circuitBrand(c.id).name}
+              {tracks.data?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
             </select>
           </label>
           <span>
-            Rules {R.id}, Open JSON class. Need something to start from? Try the demo agents on any <Link to="/circuits">circuit</Link>, or read the{" "}
+            Rules {R.id}. Checks a network file and runs its laps here without publishing it. To add it to Models, use <code>fevo publish</code>. See the{" "}
             <Link to="/rules#agent-spec">agent spec</Link>.
           </span>
         </div>
@@ -140,13 +140,9 @@ export function Upload() {
             </button>
           </div>
           <LapsTable laps={run.laps} medianSteps={run.medianSteps} />
-          {run.phase === "done" && run.ranked && agent ? (
-            <SubmitPanel circuitId={circuitId} agentText={agent.text} laps={run.laps} />
-          ) : (
+          {run.phase === "done" && !run.ranked && (
             <p className="small muted" style={{ padding: "12px 20px 16px" }}>
-              {run.phase === "done"
-                ? "An agent needs two finished laps to be ranked. Open the replay to see where it went wrong."
-                : "Once the laps finish you can submit them; our servers repeat these exact laps with the same build."}
+              Fewer than two laps finished, so there's no median. Open the replay to see where it went wrong.
             </p>
           )}
         </section>

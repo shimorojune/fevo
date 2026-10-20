@@ -22,7 +22,7 @@ export function LapsTable({ laps, medianSteps, selected, onSelect }: { laps: Lap
             <tr
               key={seed}
               onClick={() => l && onSelect?.(seed)}
-              style={{ cursor: l && onSelect ? "pointer" : undefined, background: selected === seed ? "var(--blue-soft)" : undefined }}
+              style={{ cursor: l && onSelect ? "pointer" : undefined, background: selected === seed ? "var(--info-soft)" : undefined }}
             >
               <td>
                 Seed {seed + 1}

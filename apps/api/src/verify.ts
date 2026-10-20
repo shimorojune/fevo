@@ -1,13 +1,14 @@
 /**
- * Re-runs a submission's official laps and compares them with what the
- * submitter's browser reported. Pure and synchronous: it runs inside a
- * verifier worker, which owns its own wasm instance.
+ * Re-runs a model's official laps on one track and compares them with the
+ * laps fevo publish reported. Pure and synchronous: it runs inside a verifier
+ * worker, which owns its own wasm instance.
  */
 import { parseAgent } from "@fevo/agent-format";
 import { runOfficialLaps, type LapResult } from "@fevo/sim";
-import { agentShape, RULES, trackFor } from "./season.ts";
+import type { TrackFile } from "@fevo/tracks";
+import { agentShape, RULES_BY_ID } from "./rules.ts";
 
-/** One lap as the browser reported it. */
+/** One lap as the publisher reported it. */
 export interface ClaimedLap {
   seed: number;
   status: string;
@@ -17,36 +18,28 @@ export interface ClaimedLap {
 
 export type ServerLap = Omit<LapResult, "trace">;
 
-/**
- * verified: laps re-run identically and the agent is ranked.
- * unranked: laps re-run identically but fewer than two finished.
- * mismatch: the server's laps differ from the claimed ones; never ranked.
- */
-export type Verdict = "verified" | "unranked" | "mismatch";
-
 export interface Verification {
   laps: ServerLap[];
   medianSteps: number | null;
-  verdict: Verdict;
-  /** Why the laps didn't match, for the submitter. */
-  detail?: string;
+  /** The first difference from the claimed laps, if any. */
+  mismatch?: string;
 }
 
 export interface VerifyJob {
-  circuitId: string;
+  rulesId: string;
+  track: TrackFile;
   agentText: string;
   claimed?: ClaimedLap[] | undefined;
 }
 
 export function verify(job: VerifyJob): Verification {
-  const track = trackFor(job.circuitId);
-  if (!track) throw new Error(`unknown circuit ${job.circuitId}`);
-  const parsed = parseAgent(job.agentText, agentShape());
+  const rules = RULES_BY_ID.get(job.rulesId);
+  if (!rules) throw new Error(`unknown rules ${job.rulesId}`);
+  const parsed = parseAgent(job.agentText, agentShape(rules));
   if (!parsed.ok) throw new Error(`agent no longer parses: ${parsed.errors[0]?.message}`);
-  const official = runOfficialLaps(RULES, track, parsed.program);
-  const detail = job.claimed ? compare(official.laps, job.claimed) : undefined;
-  if (detail) return { laps: official.laps, medianSteps: null, verdict: "mismatch", detail };
-  return { laps: official.laps, medianSteps: official.medianSteps, verdict: official.ranked ? "verified" : "unranked" };
+  const official = runOfficialLaps(rules, job.track, parsed.program);
+  const mismatch = job.claimed ? compare(official.laps, job.claimed) : undefined;
+  return { laps: official.laps, medianSteps: official.medianSteps, ...(mismatch ? { mismatch } : {}) };
 }
 
 /** The first difference between server and claimed laps, or undefined if they're identical. */
@@ -56,7 +49,7 @@ export function compare(server: readonly ServerLap[], claimed: readonly ClaimedL
     const c = claimed.find((l) => l.seed === s.seed);
     if (!c) return `no lap for seed ${s.seed + 1}`;
     if (c.status !== s.status || c.steps !== s.steps || c.hash !== s.hash) {
-      return `seed ${s.seed + 1}: server ${s.status} in ${s.steps} steps (${s.hash}), browser ${c.status} in ${c.steps} steps (${c.hash})`;
+      return `seed ${s.seed + 1}: server ${s.status} in ${s.steps} steps (${s.hash}), publisher ${c.status} in ${c.steps} steps (${c.hash})`;
     }
   }
   return undefined;

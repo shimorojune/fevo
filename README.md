@@ -1,6 +1,6 @@
 # fevo
 
-Upload a neural network, get a lap time you can trust. Agents (NEAT genome or MLP, as JSON) drive real-scale circuits on one deterministic simulator. The browser runs laps for instant feedback, the server re-runs them with the same build, and only exact step-count matches are ranked.
+Train neural networks (NEAT genome or MLP, as JSON) to drive real-scale circuits on one deterministic simulator, and follow them on a private dashboard. Training publishes models and progress to the API; the dashboard lists every model and track, runs any model on any track in your browser, and shows training live.
 
 Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/decisions.md](docs/decisions.md).
 
@@ -8,9 +8,10 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 
 | Path | What |
 |---|---|
-| `apps/api` | The API: takes submissions, re-runs the three official laps in the same sim.wasm on a worker pool, ranks only exact matches with the browser's laps. Postgres via `DATABASE_URL`, embedded PGlite otherwise. `pnpm --filter @fevo/api dev` |
-| `apps/web` | The site: Vite + React. Circuits, upload, replay and rules; laps run in a Web Worker on the same wasm. `pnpm --filter @fevo/web dev` |
-| `packages/rules` | Rules versions (solo-1, solo-2, solo-3): car params in SI units, timing, seeds, sensors. Single source of truth. |
+| `apps/api` | The dashboard's API: tracks, published models and their benchmark laps, training runs and metrics, live events (SSE), username/password sign-in, a publish key for training. Re-runs a published model's clean official laps in the same sim.wasm and refuses it unless they match. Postgres via `DATABASE_URL`, embedded PGlite otherwise. Serves the built dashboard when `WEB_DIST` is set. `pnpm --filter @fevo/api dev` |
+| `apps/web` | The dashboard: Vite + React. Models, tracks, benchmarks, training and replays; laps run in a Web Worker on the same wasm. `pnpm --filter @fevo/web dev` |
+| `tools/publish` | `pnpm --filter @fevo/publish fevo …`: publish a model (runs its official laps on every track first), add a track, report a training run. Python training can report progress with `fevo.dashboard.Run`. |
+| `packages/rules` | Rules versions (solo-1 to solo-6): car params in SI units, timing, seeds, sensors. Single source of truth. |
 | `packages/branding` | Every team livery and circuit display name. Flip `BRANDING_MODE` to go generic everywhere. |
 | `packages/tracks` | Baked track file format; baked tracks land in `packages/tracks/data/`. |
 | `packages/sim-core` | AssemblyScript simulator compiled to one `sim.wasm` for browser, Node verifier and Python. Physics, sensors, laps and network evaluation. |
@@ -22,7 +23,30 @@ Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/d
 | `tools/replay` | Runs agents on every circuit and writes a self-contained replay page. |
 | `tools/parity` | Builds the neat-python parity fixture (needs Python with neat-python 2.0). |
 
-Planned next: GitHub sign-in for submissions, hosting, `tools/golden`, publishing the Python package.
+## Running the dashboard
+
+```bash
+pnpm --filter @fevo/api hash-password 'your password'     # prints AUTH_PASSWORD_HASH
+docker build -t fevo . && docker run -p 8787:8787 \
+  -e DATABASE_URL=postgres://... -e AUTH_USER=you -e AUTH_PASSWORD_HASH='scrypt$...' \
+  -e SESSION_SECRET=$(openssl rand -hex 32) -e PUBLISH_KEY=$(openssl rand -hex 32) fevo
+```
+
+One container serves the API and the dashboard on one origin. Tables are created on startup, and the baked tracks are seeded into an empty database.
+
+From the training machine:
+
+```bash
+export FEVO_API=https://your-dashboard FEVO_KEY=<PUBLISH_KEY>
+pnpm --filter @fevo/publish fevo publish winners/model.json --name "solo-6 gen 412"
+```
+
+```python
+from fevo.dashboard import Run
+run = Run.start("solo-6 ES", method="ES", config={"pop": 64})
+run.metric(gen, best=best, mean=mean)   # each generation
+run.end("done")
+```
 
 ## Commands
 
