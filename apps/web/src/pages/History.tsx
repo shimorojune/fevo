@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PageHead } from "@/components/AppShell";
 import { F1Key, F1Time } from "@/components/lap/Sectors";
 import { TrackOutline } from "@/components/TrackOutline";
@@ -25,15 +25,17 @@ function ResultBadge({ d }: { d: Drive }) {
 export function History() {
   const models = useApi(api.models, "models");
   const tracks = useApi(api.tracks, "tracks");
-  const drives = useApi(() => api.drives({ limit: 2000 }), "drives");
+  const [params, setParams] = useSearchParams();
+  const batch = Number(params.get("batch")) || undefined;
+  const drives = useApi(() => api.drives(batch ? { batch, limit: 50_000 } : { limit: 2000 }), `drives:${batch ?? ""}`);
   const files = useAllTracks(tracks.data?.map((t) => t.id) ?? []);
-  const [model, setModel] = useState("");
-  const [track, setTrack] = useState("");
+  const [model, setModel] = useState(params.get("model") ?? "");
+  const [track, setTrack] = useState(params.get("track") ?? "");
   const [res, setRes] = useState<Result>("all");
   const [picked, setPicked] = useState<number>();
   const [fresh, setFresh] = useState<number>();
   useLive((e) => {
-    if (e.type === "drive") {
+    if (e.type === "drive" && (!batch || e.drive.batchId === batch)) {
       drives.setData((l) => (l ? [e.drive, ...l.filter((d) => d.id !== e.drive.id)] : l));
       setFresh(e.drive.id);
     }
@@ -57,11 +59,30 @@ export function History() {
     return out;
   }, [all]);
   const bestOf = (m: string, t: string) => Math.min(Infinity, ...all.filter((d) => d.modelId === m && d.trackId === t && d.status === "finished").map((d) => d.steps));
-  const filterKey = `${model}|${track}|${res}`;
+  const filterKey = `${model}|${track}|${res}|${batch ?? ""}`;
 
   return (
     <>
       <PageHead title="History" sub="Every lap you've run, newest first. Runs are kept; nothing is overwritten.">
+        {batch && (
+          <span className="inline-flex h-[30px] items-center gap-1 rounded-full border border-border pr-1 pl-3 text-[12.5px]">
+            Batch #{batch}
+            <button
+              type="button"
+              aria-label="Show all runs"
+              className="grid size-[22px] place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={() =>
+                setParams((p) => {
+                  const n = new URLSearchParams(p);
+                  n.delete("batch");
+                  return n;
+                })
+              }
+            >
+              ×
+            </button>
+          </span>
+        )}
         <Pick label="Model" value={model} onChange={(e) => setModel(e.target.value)}>
           <option value="">All models</option>
           {models.data?.map((m) => (
@@ -118,7 +139,10 @@ export function History() {
                     >
                       <td className="px-3 py-[11px]">
                         <span className="font-mono">#{d.id}</span>
-                        <small className="block text-[11.5px] text-muted-foreground">{when(d.createdAt)}</small>
+                        <small className="block text-[11.5px] whitespace-nowrap text-muted-foreground">
+                          {when(d.createdAt)}
+                          {d.batchId !== null && <span title={`Run by batch #${d.batchId}`}> · batch #{d.batchId}</span>}
+                        </small>
                       </td>
                       <td className="px-3 py-[11px]">
                         <span className="font-medium">{nameOf(d.modelId)}</span>
@@ -148,7 +172,7 @@ export function History() {
                   <tr>
                     <td colSpan={8} className="px-3 py-6 text-muted-foreground">
                       {all.length ? (
-                        "No runs match these filters."
+                        batch ? "No laps from this batch match these filters yet." : "No runs match these filters."
                       ) : (
                         <>
                           No runs yet. <Link to="/run" className="text-foreground underline underline-offset-2">Run a lap</Link> and it shows up here.
@@ -217,6 +241,7 @@ function RunInspector({ d, model, ghost, track, col, best }: { d: Drive; model: 
             ["Seed", String(d.seed + 1)],
             ["Driver error", `${Math.round(d.errorLevel * 100)}%`],
             ["Ghost", ghost ?? "None"],
+            ...(d.batchId !== null ? [["Batch", `#${d.batchId}`]] : []),
             ["Rules", d.rulesId],
             ["Simulator", d.simSha256.slice(0, 10)],
             ["Ran", `${when(d.createdAt)} by ${d.createdBy}`],
@@ -231,6 +256,9 @@ function RunInspector({ d, model, ghost, track, col, best }: { d: Drive; model: 
         <div className="flex flex-wrap gap-2">
           <Button variant="default" asChild>
             <Link to={`/run?drive=${d.id}`}>Open lap view</Link>
+          </Button>
+          <Button asChild>
+            <Link to={`/compare?a=${d.id}`}>Compare</Link>
           </Button>
           <Button onClick={again}>Run again</Button>
         </div>

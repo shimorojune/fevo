@@ -5,10 +5,10 @@
  */
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, getTableColumns, inArray, ne, sql } from "drizzle-orm";
 import { fingerprint, parameterCount, parseAgent, type AgentError } from "@fevo/agent-format";
 import type { TrackFile } from "@fevo/tracks";
-import { drives, laps, models, tracks, trainingMetrics, trainingRuns, type Db, type Drive, type Lap, type Model, type ModelStatus, type RunStatus, type Track, type TrainingRun } from "./db.ts";
+import { batches, drives, laps, models, tracks, trainingMetrics, trainingRuns, type Batch, type BatchStatus, type Db, type Drive, type Lap, type Model, type ModelStatus, type RunStatus, type Track, type TrainingRun } from "./db.ts";
 import type { Verifier } from "./pool.ts";
 import { agentShape, RULES_BY_ID, SIM_WASM_SHA256 } from "./rules.ts";
 
@@ -16,7 +16,8 @@ export type StoreEvent =
   | { type: "model"; model: ModelSummary }
   | { type: "run"; run: TrainingRun }
   | { type: "metrics"; runId: string; metrics: { step: number; values: Record<string, number> }[] }
-  | { type: "drive"; drive: Drive };
+  | { type: "drive"; drive: Drive }
+  | { type: "batch"; batch: BatchSummary };
 
 export interface NewDrive {
   modelId: string;
@@ -30,6 +31,7 @@ export interface NewDrive {
   gatesPassed: number;
   hash: string;
   sectorEnds?: number[] | undefined;
+  batchId?: number | undefined;
   createdBy: string;
 }
 
@@ -37,8 +39,37 @@ export interface DriveFilter {
   modelId?: string | undefined;
   trackId?: string | undefined;
   status?: string | undefined;
+  batchId?: number | undefined;
   limit?: number | undefined;
 }
+
+export interface NewBatch {
+  modelIds: string[];
+  trackIds: string[];
+  seeds: number[];
+  errorLevels: number[];
+  draws: number;
+  createdBy: string;
+}
+
+/** A batch with how far it has got: laps saved, and how many of them finished. */
+export type BatchSummary = Batch & { done: number; finished: number };
+
+/** Every saved lap of one model on one track at one driver-error level, summed up. */
+export interface BenchmarkCell {
+  modelId: string;
+  rulesId: string;
+  trackId: string;
+  errorLevel: number;
+  laps: number;
+  finished: number;
+  medianSteps: number | null;
+  bestSteps: number | null;
+}
+
+/** Laps a batch runs: one per seed at 0% (the same lap every time), `draws` per seed with error on. */
+export const batchTotal = (b: Pick<NewBatch, "modelIds" | "trackIds" | "seeds" | "errorLevels" | "draws">) =>
+  b.modelIds.length * b.trackIds.length * b.seeds.length * b.errorLevels.reduce((n, e) => n + (e === 0 ? 1 : b.draws), 0);
 
 export interface PostedLap {
   trackId: string;
@@ -246,6 +277,10 @@ export class Store {
       const [ghost] = await this.#db.select({ id: models.id }).from(models).where(eq(models.id, d.ghostModelId));
       if (!ghost) return { ok: false, error: "No such ghost model." };
     }
+    if (d.batchId !== undefined) {
+      const [batch] = await this.#db.select({ status: batches.status }).from(batches).where(eq(batches.id, d.batchId));
+      if (!batch) return { ok: false, error: "No such batch." };
+    }
     // A clean lap is verified when it matches the lap the server re-ran for this model, track and seed.
     let verified = false;
     if (d.errorLevel === 0) {
@@ -257,9 +292,10 @@ export class Store {
     }
     const [drive] = await this.#db
       .insert(drives)
-      .values({ ...d, ghostModelId: d.ghostModelId ?? null, sectorEnds: d.sectorEnds ?? null, rulesId: model.rulesId, simSha256: SIM_WASM_SHA256, verified })
+      .values({ ...d, ghostModelId: d.ghostModelId ?? null, sectorEnds: d.sectorEnds ?? null, batchId: d.batchId ?? null, rulesId: model.rulesId, simSha256: SIM_WASM_SHA256, verified })
       .returning();
     this.events.emit("event", { type: "drive", drive: drive! });
+    if (d.batchId !== undefined) await this.#finishIfComplete(d.batchId);
     return { ok: true, drive: drive! };
   }
 
@@ -268,13 +304,90 @@ export class Store {
       f.modelId ? eq(drives.modelId, f.modelId) : undefined,
       f.trackId ? eq(drives.trackId, f.trackId) : undefined,
       f.status ? eq(drives.status, f.status) : undefined,
+      f.batchId !== undefined ? eq(drives.batchId, f.batchId) : undefined,
     );
-    return this.#db.select().from(drives).where(where).orderBy(desc(drives.createdAt), desc(drives.id)).limit(Math.min(f.limit ?? 500, 2000));
+    // A batch can hold thousands of laps; resuming one needs them all.
+    const cap = f.batchId !== undefined ? 50_000 : 2000;
+    return this.#db.select().from(drives).where(where).orderBy(desc(drives.createdAt), desc(drives.id)).limit(Math.min(f.limit ?? 500, cap));
   }
 
   async getDrive(id: number): Promise<Drive | undefined> {
     const [row] = await this.#db.select().from(drives).where(eq(drives.id, id));
     return row;
+  }
+
+  // Batches: many scenarios at once, run in the browser and saved as drives
+
+  async createBatch(b: NewBatch): Promise<{ ok: true; batch: BatchSummary } | { ok: false; error: string }> {
+    const known = await this.#db.select({ id: models.id }).from(models).where(inArray(models.id, b.modelIds));
+    if (known.length !== new Set(b.modelIds).size) return { ok: false, error: "One of those models doesn't exist." };
+    const knownTracks = await this.#db.select({ id: tracks.id }).from(tracks).where(inArray(tracks.id, b.trackIds));
+    if (knownTracks.length !== new Set(b.trackIds).size) return { ok: false, error: "One of those tracks doesn't exist." };
+    const [row] = await this.#db
+      .insert(batches)
+      .values({ ...b, total: batchTotal(b), status: "running" })
+      .returning();
+    const batch = { ...row!, done: 0, finished: 0 };
+    this.events.emit("event", { type: "batch", batch });
+    return { ok: true, batch };
+  }
+
+  #batchQuery() {
+    return this.#db
+      .select({
+        ...getTableColumns(batches),
+        done: sql<number>`count(${drives.id})::int`,
+        finished: sql<number>`(count(${drives.id}) filter (where ${drives.status} = 'finished'))::int`,
+      })
+      .from(batches)
+      .leftJoin(drives, eq(drives.batchId, batches.id))
+      .groupBy(batches.id);
+  }
+
+  listBatches(): Promise<BatchSummary[]> {
+    return this.#batchQuery().orderBy(desc(batches.createdAt), desc(batches.id));
+  }
+
+  async getBatch(id: number): Promise<BatchSummary | undefined> {
+    const [row] = await this.#batchQuery().where(eq(batches.id, id));
+    return row;
+  }
+
+  /** Pause, resume or stop a batch. A finished batch stays finished. */
+  async setBatchStatus(id: number, status: BatchStatus): Promise<BatchSummary | undefined> {
+    const now = await this.getBatch(id);
+    if (!now) return undefined;
+    if (now.status === "done" || now.status === status) return now;
+    const ended = status === "done" || status === "stopped" ? new Date() : null;
+    await this.#db.update(batches).set({ status, endedAt: ended }).where(eq(batches.id, id));
+    const batch = (await this.getBatch(id))!;
+    this.events.emit("event", { type: "batch", batch });
+    return batch;
+  }
+
+  async #finishIfComplete(id: number) {
+    const [b] = await this.#db.select({ total: batches.total, status: batches.status }).from(batches).where(eq(batches.id, id));
+    if (!b || b.status === "done") return;
+    const [n] = await this.#db.select({ n: count() }).from(drives).where(eq(drives.batchId, id));
+    if (n!.n >= b.total) await this.setBatchStatus(id, "done");
+  }
+
+  /** Benchmarks: every model on every track at every driver-error level, from the saved laps. */
+  benchmarks(): Promise<BenchmarkCell[]> {
+    const fin = sql`${drives.status} = 'finished'`;
+    return this.#db
+      .select({
+        modelId: drives.modelId,
+        rulesId: drives.rulesId,
+        trackId: drives.trackId,
+        errorLevel: drives.errorLevel,
+        laps: sql<number>`count(*)::int`,
+        finished: sql<number>`(count(*) filter (where ${fin}))::int`,
+        medianSteps: sql<number | null>`(percentile_disc(0.5) within group (order by ${drives.steps}) filter (where ${fin}))::int`,
+        bestSteps: sql<number | null>`(min(${drives.steps}) filter (where ${fin}))::int`,
+      })
+      .from(drives)
+      .groupBy(drives.modelId, drives.rulesId, drives.trackId, drives.errorLevel);
   }
 
   async createRun(r: { name: string; method: string; machine?: string | undefined; config?: Record<string, unknown> | undefined; notes?: string | undefined }): Promise<TrainingRun> {

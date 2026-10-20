@@ -12,11 +12,14 @@ export interface DriveRequest {
   agentText: string;
   ghostAgentText?: string | undefined;
   ghostRulesId?: string | undefined;
+  /** Send back only the result and its mini-sector ends, not the trace (batches). */
+  summary?: boolean | undefined;
 }
 
 export type Request = DriveRequest;
 
 export type Response =
   | { id: number; type: "lap"; who: "model" | "ghost"; lap: LapResult }
+  | { id: number; type: "summary"; lap: LapResult; ends: number[] }
   | { id: number; type: "done" }
   | { id: number; type: "failed"; message: string };

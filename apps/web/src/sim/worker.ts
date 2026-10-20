@@ -7,6 +7,7 @@
 import { parseAgent } from "@fevo/agent-format";
 import { rulesById } from "@fevo/rules";
 import type { LapResult } from "@fevo/sim";
+import { miniSectorEnds } from "../lib/lap";
 import { loadTrackFile } from "../lib/tracks";
 import type { Request, Response } from "./protocol";
 
@@ -30,6 +31,11 @@ self.onmessage = async (e: MessageEvent<Request>) => {
       loadTrack(track);
       loadAgent(parsed.program);
       const lap: LapResult = { ...runLap(rules, r.seed, { trace: true, error: { level: errorLevel, noiseSeed: r.noiseSeed } }), gateCount: track.gates.length };
+      if (r.summary) {
+        const { trace: _t, ...rest } = lap;
+        post({ id: r.id, type: "summary", lap: rest, ends: miniSectorEnds(lap, track) });
+        return;
+      }
       const t = lap.trace!;
       post({ id: r.id, type: "lap", who, lap }, [t.x.buffer, t.y.buffer, t.yaw.buffer, t.speed.buffer, t.steer.buffer, t.throttle.buffer, t.gates.buffer, t.frontSlide.buffer, t.rearSlide.buffer]);
     };

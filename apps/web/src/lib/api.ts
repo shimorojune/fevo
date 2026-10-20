@@ -95,14 +95,49 @@ export interface Drive {
   hash: string;
   sectorEnds: number[] | null;
   verified: boolean;
+  batchId: number | null;
   createdBy: string;
   createdAt: string;
   lapTime: string | null;
 }
 
+export type BatchStatus = "running" | "paused" | "done" | "stopped";
+
+/** Many scenarios run in one go; each lap is a drive tagged with the batch. */
+export interface Batch {
+  id: number;
+  modelIds: string[];
+  trackIds: string[];
+  seeds: number[];
+  errorLevels: number[];
+  draws: number;
+  total: number;
+  status: BatchStatus;
+  createdBy: string;
+  createdAt: string;
+  endedAt: string | null;
+  /** Laps saved so far, and how many of them finished. */
+  done: number;
+  finished: number;
+}
+
+export type NewBatch = Pick<Batch, "modelIds" | "trackIds" | "seeds" | "errorLevels" | "draws">;
+
+/** Every saved lap of one model on one track at one driver-error level. */
+export interface BenchmarkCell {
+  modelId: string;
+  trackId: string;
+  errorLevel: number;
+  laps: number;
+  finished: number;
+  medianSteps: number | null;
+  bestSteps: number | null;
+}
+
 export type NewDrive = Pick<Drive, "modelId" | "trackId" | "seed" | "errorLevel" | "noiseSeed" | "status" | "steps" | "gatesPassed" | "hash"> & {
   ghostModelId?: string;
   sectorEnds?: number[];
+  batchId?: number;
 };
 
 export class ApiError extends Error {
@@ -133,12 +168,17 @@ export const api = {
   track: (id: string) => call<TrackSummary & { data: TrackFile }>(`/api/tracks/${encodeURIComponent(id)}`),
   runs: () => call<{ runs: TrainingRun[] }>("/api/runs").then((r) => r.runs),
   run: (id: string) => call<RunDetail>(`/api/runs/${encodeURIComponent(id)}`),
-  drives: (f: { model?: string; track?: string; status?: string; limit?: number } = {}) => {
+  drives: (f: { model?: string; track?: string; status?: string; batch?: number; limit?: number } = {}) => {
     const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)]));
     return call<{ drives: Drive[] }>(`/api/drives${q.size ? `?${q}` : ""}`).then((r) => r.drives);
   },
   drive: (id: number) => call<Drive>(`/api/drives/${id}`),
   saveDrive: (d: NewDrive) => call<Drive>("/api/drives", { method: "POST", body: JSON.stringify(d) }),
+  batches: () => call<{ batches: Batch[] }>("/api/batches").then((r) => r.batches),
+  batch: (id: number) => call<Batch>(`/api/batches/${id}`),
+  createBatch: (b: NewBatch) => call<Batch>("/api/batches", { method: "POST", body: JSON.stringify(b) }),
+  setBatchStatus: (id: number, status: BatchStatus) => call<Batch>(`/api/batches/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  benchmarks: () => call<{ cells: BenchmarkCell[] }>("/api/benchmarks").then((r) => r.cells),
   updateRun: (id: string, patch: { status?: RunStatus; notes?: string | null }) =>
     call<TrainingRun>(`/api/runs/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
 };

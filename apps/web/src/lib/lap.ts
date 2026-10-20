@@ -4,6 +4,7 @@
  */
 import type { LapResult, LapTrace } from "@fevo/sim";
 import type { TrackFile } from "@fevo/tracks";
+import type { Drive } from "./api";
 
 export const MINI_SECTORS = 24;
 export const PER_SECTOR = 8;
@@ -173,4 +174,14 @@ export function colours(me: LapTimes, rivals: LapTimes[], own: LapTimes[]): Colo
     sec: me.sec.map((t, k) => (t === null ? null : f1(t, best(rivals.map((r) => r.sec[k])), best(own.map((o) => o.sec[k]))))),
     lap: me.steps === null ? null : f1(me.steps, best(rivals.map((r) => r.steps)), best(own.map((o) => o.steps))),
   };
+}
+
+/** Colour a lap against every saved run on the track (but `skip`, the lap itself), plus laps just driven. */
+export function judge(modelId: string, me: LapTimes, drives: Pick<Drive, "id" | "modelId" | "sectorEnds" | "status" | "steps">[], extra: { modelId: string; times: LapTimes }[], skip?: number) {
+  const all = [...drives.filter((d) => d.id !== skip).map((d) => ({ modelId: d.modelId, times: timesOf(d.sectorEnds, d.status === "finished", d.steps) })), ...extra];
+  return colours(
+    me,
+    all.filter((o) => o.modelId !== modelId).map((o) => o.times),
+    all.filter((o) => o.modelId === modelId).map((o) => o.times),
+  );
 }

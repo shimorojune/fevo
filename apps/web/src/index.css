@@ -30,6 +30,8 @@
   --driver-b: #e2580b;
   --success: #157f4c;
   --destructive: #c8322a;
+  /* Time lost against the other car; time gained is --success. */
+  --loss: #c4492a;
   --sector-purple: #9b30ff;
   --sector-purple-text: #9b30ff;
   --sector-green: #00c853;
@@ -62,6 +64,7 @@
   --driver-b: #ff8f4d;
   --success: #7cc89b;
   --destructive: #ff6b5e;
+  --loss: #ff8a65;
   --sector-purple-text: #b46bff;
   --scene-grass: #141a14;
   --scene-asphalt: #2c3139;
@@ -100,6 +103,7 @@
   --color-driver-b: var(--driver-b);
   --color-success: var(--success);
   --color-destructive: var(--destructive);
+  --color-loss: var(--loss);
   --color-sector-purple: var(--sector-purple);
   --color-sector-purple-text: var(--sector-purple-text);
   --color-sector-green: var(--sector-green);

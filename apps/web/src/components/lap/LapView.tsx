@@ -10,6 +10,7 @@ import { cornerFractions, lapStats, sample, type Colours, type LapTimes } from "
 import { drawMain, drawMap, drawTelemetry, geometry, tyreState, type Car } from "@/lib/replay";
 import { indexAt, series } from "@/lib/series";
 import { cn } from "@/lib/utils";
+import { Corners } from "./Corners";
 import { Maps } from "./Maps";
 import { F1Key, F1Time, Sectors } from "./Sectors";
 import { TRACES, Traces, type TraceKey } from "./Traces";
@@ -42,7 +43,7 @@ const lapClock = (steps: number) => {
 
 /**
  * The lap view: replay (the app's renderer), telemetry strip and playback controls on the left;
- * traces open on demand in a dock under the track; Lap, Maps and Summary in tabs beside it.
+ * traces open on demand in a dock under the track; Lap, Corners (with a ghost), Maps and Summary in tabs beside it.
  */
 export function LapView({ lap, header }: { lap: LapBundle; header?: React.ReactNode }) {
   const { track, model, ghost, names } = lap;
@@ -228,6 +229,7 @@ export function LapView({ lap, header }: { lap: LapBundle; header?: React.ReactN
       <Tabs defaultValue="lap" className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border">
         <TabsList aria-label="Lap details">
           <TabsTrigger value="lap">Lap</TabsTrigger>
+          {b && <TabsTrigger value="corners">Corners</TabsTrigger>}
           <TabsTrigger value="maps">Maps</TabsTrigger>
           <TabsTrigger value="sum">Summary</TabsTrigger>
         </TabsList>
@@ -257,6 +259,20 @@ export function LapView({ lap, header }: { lap: LapBundle; header?: React.ReactN
           <Sectors ends={lap.ends} times={lap.times} col={lap.col} frame={f} steps={steps} finished={finished} />
           <canvas ref={map} className="block aspect-[1.3] w-full" aria-label="Position in lap" />
         </TabsContent>
+        {b && (
+          <TabsContent value="corners">
+            <Corners
+              s={s}
+              corners={cornersF}
+              names={names}
+              steps={[finished ? model.steps : null, ghost!.status === "finished" ? ghost!.steps : null]}
+              onSeek={(kk) => {
+                seek(s.fa[kk]!, false);
+                setPlaying(true);
+              }}
+            />
+          </TabsContent>
+        )}
         <TabsContent value="maps">
           <Maps track={track} s={s} a={a} b={b} names={names} times={lap.times} col={lap.col} at={hoverK ?? k} cornerFractions={cornersF} />
         </TabsContent>
