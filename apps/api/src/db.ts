@@ -7,7 +7,7 @@
  * never stored; the browser recomputes them from model + track + rules.
  */
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { bigserial, boolean, doublePrecision, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, bigserial, boolean, doublePrecision, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { TrackFile } from "@fevo/tracks";
 
 export const MODEL_STATUS = ["candidate", "house", "archived"] as const;
@@ -15,6 +15,9 @@ export type ModelStatus = (typeof MODEL_STATUS)[number];
 
 export const RUN_STATUS = ["running", "done", "failed", "stopped"] as const;
 export type RunStatus = (typeof RUN_STATUS)[number];
+
+export const BATCH_STATUS = ["running", "paused", "done", "stopped"] as const;
+export type BatchStatus = (typeof BATCH_STATUS)[number];
 
 export const tracks = pgTable("tracks", {
   id: text("id").primaryKey(),
@@ -96,6 +99,25 @@ export const laps = pgTable(
 );
 
 /**
+ * Many scenarios run in one go from the Batches screen: every model on every track, seed and
+ * driver-error level picked, with `draws` laps per setting that has error on (0% runs once,
+ * since it gives the same lap every time). The laps themselves are drives tagged with the batch.
+ */
+export const batches = pgTable("batches", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  modelIds: jsonb("model_ids").$type<string[]>().notNull(),
+  trackIds: jsonb("track_ids").$type<string[]>().notNull(),
+  seeds: jsonb("seeds").$type<number[]>().notNull(),
+  errorLevels: jsonb("error_levels").$type<number[]>().notNull(),
+  draws: integer("draws").notNull(),
+  total: integer("total").notNull(),
+  status: text("status").$type<BatchStatus>().notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+});
+
+/**
  * A lap run from the dashboard's Run screen: one model, one track, one seed, at a driver-error
  * level, with an optional ghost to compare against. Kept forever; History lists them.
  */
@@ -118,12 +140,15 @@ export const drives = pgTable("drives", {
   sectorEnds: jsonb("sector_ends").$type<number[]>(),
   /** True when a clean lap matches the lap the server verified for this model, track and seed. */
   verified: boolean("verified").notNull().default(false),
+  /** The batch that ran this lap, if any. */
+  batchId: bigint("batch_id", { mode: "number" }),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type Track = typeof tracks.$inferSelect;
 export type Drive = typeof drives.$inferSelect;
+export type Batch = typeof batches.$inferSelect;
 export type TrainingRun = typeof trainingRuns.$inferSelect;
 export type TrainingMetric = typeof trainingMetrics.$inferSelect;
 export type Model = typeof models.$inferSelect;
@@ -214,6 +239,21 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS drives_recent ON drives (created_at DESC);
   CREATE INDEX IF NOT EXISTS drives_model_track ON drives (model_id, track_id);
+  CREATE TABLE IF NOT EXISTS batches (
+    id bigserial PRIMARY KEY,
+    model_ids jsonb NOT NULL,
+    track_ids jsonb NOT NULL,
+    seeds jsonb NOT NULL,
+    error_levels jsonb NOT NULL,
+    draws integer NOT NULL,
+    total integer NOT NULL,
+    status text NOT NULL,
+    created_by text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    ended_at timestamptz
+  );
+  ALTER TABLE drives ADD COLUMN IF NOT EXISTS batch_id bigint REFERENCES batches(id) ON DELETE SET NULL;
+  CREATE INDEX IF NOT EXISTS drives_batch ON drives (batch_id);
 `;
 
 /** Connect and create the schema. Without a URL, an in-memory PGlite database (or a directory, with dataDir). */

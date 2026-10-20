@@ -3,13 +3,14 @@
  * app, shared by every page that listens. EventSource reconnects on its own.
  */
 import { useEffect, useRef } from "react";
-import type { Drive, Metric, ModelSummary, TrainingRun } from "./api";
+import type { Batch, Drive, Metric, ModelSummary, TrainingRun } from "./api";
 
 export type LiveEvent =
   | { type: "model"; model: ModelSummary }
   | { type: "run"; run: TrainingRun }
   | { type: "metrics"; runId: string; metrics: Metric[] }
-  | { type: "drive"; drive: Drive };
+  | { type: "drive"; drive: Drive }
+  | { type: "batch"; batch: Batch };
 
 type Listener = (e: LiveEvent) => void;
 
@@ -19,7 +20,7 @@ let source: EventSource | null = null;
 function connect() {
   if (source) return;
   source = new EventSource("/api/events");
-  for (const type of ["model", "run", "metrics", "drive"] as const) {
+  for (const type of ["model", "run", "metrics", "drive", "batch"] as const) {
     source.addEventListener(type, (m) => {
       const e = JSON.parse((m as MessageEvent<string>).data) as LiveEvent;
       for (const l of listeners) l(e);

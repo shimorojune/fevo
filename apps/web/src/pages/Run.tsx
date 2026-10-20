@@ -7,7 +7,7 @@ import { Pick } from "@/components/ui/panel";
 import { Segmented } from "@/components/ui/segmented";
 import { api, useApi, type Drive, type Model } from "@/lib/api";
 import { gap, km, lapTime, STATUS_LABEL } from "@/lib/format";
-import { colours, miniSectorEnds, timesOf, type LapTimes } from "@/lib/lap";
+import { judge, miniSectorEnds, timesOf } from "@/lib/lap";
 import { loadTrackFile } from "@/lib/tracks";
 import { driveLap } from "@/sim/client";
 
@@ -27,16 +27,6 @@ interface Scenario {
 type Info = { state: "running" | "saved" | "history" | "failed"; text: string; drive?: Drive };
 
 const when = (iso: string) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-
-/** Colour a lap against every saved run on the track, plus the ghost lap just driven. */
-function judge(modelId: string, me: LapTimes, drives: Drive[], extra: { modelId: string; times: LapTimes }[], skip?: number) {
-  const all = [...drives.filter((d) => d.id !== skip).map((d) => ({ modelId: d.modelId, times: timesOf(d.sectorEnds, d.status === "finished", d.steps) })), ...extra];
-  return colours(
-    me,
-    all.filter((o) => o.modelId !== modelId).map((o) => o.times),
-    all.filter((o) => o.modelId === modelId).map((o) => o.times),
-  );
-}
 
 export function Run() {
   const [params, setParams] = useSearchParams();

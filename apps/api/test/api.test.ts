@@ -174,3 +174,55 @@ test("drives: a lap run from the dashboard is saved, verified when it matches, a
   assert.equal((await signedIn("POST", "/api/drives", { ...base, modelId: "nope", errorLevel: 0, status: "finished", steps: 1, hash: "a" })).status, 404);
   assert.equal((await signedIn("POST", "/api/drives", { ...base, errorLevel: 2, status: "finished", steps: 1, hash: "a" })).status, 400);
 });
+
+test("batches: laps saved with a batch count towards it, it finishes itself, and benchmarks sum them up", async () => {
+  const { models } = (await (await signedIn("GET", "/api/models")).json()) as { models: { id: string; name: string }[] };
+  const house = models.find((m) => m.name === "House")!;
+  const spec = { modelIds: [house.id], trackIds: ["monza"], seeds: [0, 1], errorLevels: [0, 0.06], draws: 2 };
+  assert.equal((await withKey("POST", "/api/batches", spec)).status, 401, "the publish key can't start batches");
+  assert.equal((await signedIn("POST", "/api/batches", { ...spec, seeds: [0, 0] })).status, 400);
+  assert.equal((await signedIn("POST", "/api/batches", { ...spec, draws: 0 })).status, 400);
+  assert.equal((await signedIn("POST", "/api/batches", { ...spec, trackIds: ["nowhere"] })).status, 404);
+  const created = await signedIn("POST", "/api/batches", spec);
+  assert.equal(created.status, 201, await created.clone().text());
+  const batch = (await created.json()) as { id: number; total: number; status: string; done: number };
+  // 2 seeds x (1 clean + 2 with error)
+  assert.equal(batch.total, 6);
+  assert.equal(batch.status, "running");
+  assert.equal(batch.done, 0);
+
+  const save = (seed: number, errorLevel: number, noiseSeed: number, status: string, steps: number) =>
+    signedIn("POST", "/api/drives", { modelId: house.id, trackId: "monza", seed, errorLevel, noiseSeed, status, steps, gatesPassed: status === "finished" ? 144 : 30, hash: "ab", batchId: batch.id });
+  assert.equal((await save(0, 0, 0, "finished", 9000)).status, 201);
+  assert.equal((await save(0, 0.06, 5, "finished", 9300)).status, 201);
+  assert.equal((await save(0, 0.06, 6, "crashed", 2000)).status, 201);
+  assert.equal((await signedIn("PATCH", `/api/batches/${batch.id}`, { status: "paused" })).status, 200);
+  assert.equal((await signedIn("PATCH", `/api/batches/${batch.id}`, { status: "sideways" })).status, 400);
+  const paused = (await (await signedIn("GET", `/api/batches/${batch.id}`)).json()) as { status: string; done: number; finished: number };
+  assert.deepEqual([paused.status, paused.done, paused.finished], ["paused", 3, 2]);
+  assert.equal((await signedIn("PATCH", `/api/batches/${batch.id}`, { status: "running" })).status, 200);
+  assert.equal((await save(1, 0, 0, "finished", 9100)).status, 201);
+  assert.equal((await save(1, 0.06, 7, "finished", 9500)).status, 201);
+  assert.equal((await save(1, 0.06, 8, "finished", 9400)).status, 201);
+  const done = (await (await signedIn("GET", `/api/batches/${batch.id}`)).json()) as { status: string; done: number; endedAt: string | null };
+  assert.equal(done.status, "done");
+  assert.equal(done.done, 6);
+  assert.ok(done.endedAt);
+  assert.equal((await signedIn("POST", "/api/drives", { modelId: house.id, trackId: "monza", seed: 0, errorLevel: 0, noiseSeed: 0, status: "finished", steps: 1, gatesPassed: 1, hash: "a", batchId: 999999 })).status, 404);
+
+  const listed = (await (await signedIn("GET", `/api/drives?batch=${batch.id}`)).json()) as { drives: { batchId: number }[] };
+  assert.equal(listed.drives.length, 6);
+  assert.ok(listed.drives.every((d) => d.batchId === batch.id));
+  const { batches } = (await (await signedIn("GET", "/api/batches")).json()) as { batches: { id: number }[] };
+  assert.equal(batches[0]!.id, batch.id);
+
+  const { cells } = (await (await signedIn("GET", "/api/benchmarks")).json()) as {
+    cells: { modelId: string; trackId: string; errorLevel: number; laps: number; finished: number; medianSteps: number | null; bestSteps: number | null; bestLapTime: string | null }[];
+  };
+  const noisy = cells.find((x) => x.modelId === house.id && x.trackId === "monza" && x.errorLevel === 0.06)!;
+  assert.deepEqual([noisy.laps, noisy.finished, noisy.bestSteps], [4, 3, 9300]);
+  assert.equal(noisy.medianSteps, 9400);
+  assert.ok(noisy.bestLapTime);
+  const clean = cells.find((x) => x.modelId === house.id && x.trackId === "monza" && x.errorLevel === 0)!;
+  assert.deepEqual([clean.laps, clean.finished, clean.bestSteps], [2, 2, 9000]);
+});

@@ -12,9 +12,9 @@ import { MAX_FILE_BYTES } from "@fevo/agent-format";
 import { formatLapTime } from "@fevo/sim";
 import type { TrackFile } from "@fevo/tracks";
 import type { Auth } from "./auth.ts";
-import { MODEL_STATUS, RUN_STATUS, type ModelStatus, type RunStatus } from "./db.ts";
+import { BATCH_STATUS, MODEL_STATUS, RUN_STATUS, type BatchStatus, type ModelStatus, type RunStatus } from "./db.ts";
 import { DEFAULT_RULES, RULES_BY_ID, SIM_WASM_SHA256 } from "./rules.ts";
-import type { PostedLap, Store, StoreEvent } from "./store.ts";
+import { batchTotal, type BenchmarkCell, type PostedLap, type Store, type StoreEvent } from "./store.ts";
 
 export interface AppOptions {
   /** Client address for login throttling. Behind a proxy, read its forwarded header. */
@@ -193,7 +193,9 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
     const q = c.req.query();
     const limit = q.limit ? Number(q.limit) : undefined;
     if (limit !== undefined && !(Number.isInteger(limit) && limit > 0)) return bad(c, "limit must be a positive whole number.");
-    return c.json({ drives: (await store.listDrives({ modelId: q.model, trackId: q.track, status: q.status, limit })).map(withDriveTime) });
+    const batchId = q.batch ? Number(q.batch) : undefined;
+    if (batchId !== undefined && !Number.isInteger(batchId)) return bad(c, "batch must be a batch id.");
+    return c.json({ drives: (await store.listDrives({ modelId: q.model, trackId: q.track, status: q.status, batchId, limit })).map(withDriveTime) });
   });
   app.get("/api/drives/:id", auth.requireUser, async (c) => {
     const id = Number(c.req.param("id"));
@@ -203,7 +205,7 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
   app.post("/api/drives", auth.requireUser, async (c) => {
     const body = await json(c);
     if (!body) return bad(c, "Send a JSON body.");
-    const { modelId, trackId, seed, errorLevel, noiseSeed, ghostModelId, status, steps, gatesPassed, hash, sectorEnds } = body;
+    const { modelId, trackId, seed, errorLevel, noiseSeed, ghostModelId, status, steps, gatesPassed, hash, sectorEnds, batchId } = body;
     if (typeof modelId !== "string" || typeof trackId !== "string") return bad(c, "modelId and trackId are required.");
     if (!Number.isInteger(seed) || (seed as number) < 0) return bad(c, "seed must be a whole number from 0.");
     if (typeof errorLevel !== "number" || !(errorLevel >= 0 && errorLevel <= 1)) return bad(c, "errorLevel must be between 0 and 1.");
@@ -212,6 +214,7 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
     if (typeof status !== "string" || !["finished", "crashed", "stopped", "timed-out", "error"].includes(status)) return bad(c, "status must be a lap result.");
     if (!Number.isInteger(steps) || (steps as number) < 0 || !Number.isInteger(gatesPassed) || (gatesPassed as number) < 0) return bad(c, "steps and gatesPassed must be whole numbers.");
     if (typeof hash !== "string" || !/^[0-9a-f]{1,64}$/.test(hash)) return bad(c, "hash must be the lap's state hash.");
+    if (batchId !== undefined && batchId !== null && !Number.isInteger(batchId)) return bad(c, "batchId must be a batch id.");
     if (sectorEnds !== undefined && !(Array.isArray(sectorEnds) && sectorEnds.length <= 64 && sectorEnds.every((x) => typeof x === "number" && x >= 0))) return bad(c, "sectorEnds must be a list of step numbers.");
     const r = await store.addDrive({
       modelId,
@@ -225,10 +228,48 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
       gatesPassed: gatesPassed as number,
       hash,
       sectorEnds: sectorEnds as number[] | undefined,
+      batchId: (batchId as number | null | undefined) ?? undefined,
       createdBy: auth.user(c) ?? "unknown",
     });
     return r.ok ? c.json(withDriveTime(r.drive), 201) : c.json({ error: r.error }, 404);
   });
+
+  // Batches: many scenarios at once. The browser runs the laps and saves each as a drive.
+
+  app.get("/api/batches", auth.requireUser, async (c) => c.json({ batches: await store.listBatches() }));
+  app.get("/api/batches/:id", auth.requireUser, async (c) => {
+    const id = Number(c.req.param("id"));
+    const b = Number.isInteger(id) ? await store.getBatch(id) : undefined;
+    return b ? c.json(b) : c.json({ error: "No such batch." }, 404);
+  });
+  app.post("/api/batches", auth.requireUser, async (c) => {
+    const body = await json(c);
+    if (!body) return bad(c, "Send a JSON body.");
+    const { modelIds, trackIds, seeds, errorLevels, draws } = body;
+    const list = <T>(x: unknown, ok: (v: unknown) => v is T, max: number): x is T[] => Array.isArray(x) && x.length > 0 && x.length <= max && x.every(ok) && new Set(x).size === x.length;
+    const isText = (v: unknown): v is string => typeof v === "string";
+    const isSeed = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < 100;
+    const isLevel = (v: unknown): v is number => typeof v === "number" && v >= 0 && v <= 1;
+    if (!list(modelIds, isText, 100)) return bad(c, "modelIds must be a list of model ids.");
+    if (!list(trackIds, isText, 100)) return bad(c, "trackIds must be a list of track ids.");
+    if (!list(seeds, isSeed, 100)) return bad(c, "seeds must be a list of different whole numbers from 0.");
+    if (!list(errorLevels, isLevel, 20)) return bad(c, "errorLevels must be a list of different levels between 0 and 1.");
+    if (!Number.isInteger(draws) || (draws as number) < 1 || (draws as number) > 100) return bad(c, "draws must be a whole number from 1 to 100.");
+    const b = { modelIds, trackIds, seeds, errorLevels, draws: draws as number };
+    if (batchTotal(b) > 50_000) return bad(c, `That's ${batchTotal(b)} laps; a batch can run at most 50000.`);
+    const r = await store.createBatch({ ...b, createdBy: auth.user(c) ?? "unknown" });
+    return r.ok ? c.json(r.batch, 201) : c.json({ error: r.error }, 404);
+  });
+  app.patch("/api/batches/:id", auth.requireUser, async (c) => {
+    const body = await json(c);
+    const id = Number(c.req.param("id"));
+    if (!body || !BATCH_STATUS.includes(body.status as BatchStatus)) return bad(c, `status must be one of ${BATCH_STATUS.join(", ")}.`);
+    const b = Number.isInteger(id) ? await store.setBatchStatus(id, body.status as BatchStatus) : undefined;
+    return b ? c.json(b) : c.json({ error: "No such batch." }, 404);
+  });
+
+  // Benchmarks: every model on every track at every driver-error level, from saved laps.
+  app.get("/api/benchmarks", auth.requireUser, async (c) => c.json({ cells: (await store.benchmarks()).map(withCellTimes) }));
 
   // Live updates for the dashboard.
   app.get("/api/events", auth.requireUser, (c) =>
@@ -253,6 +294,12 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
   }
 
   return app;
+}
+
+/** Lap times for a benchmark cell, at its rules timing. */
+function withCellTimes(b: BenchmarkCell) {
+  const hz = RULES_BY_ID.get(b.rulesId)?.timing.agentHz ?? DEFAULT_RULES.timing.agentHz;
+  return { ...b, medianLapTime: b.medianSteps === null ? null : formatLapTime(b.medianSteps, hz), bestLapTime: b.bestSteps === null ? null : formatLapTime(b.bestSteps, hz) };
 }
 
 /** Adds the lap time, at the drive's rules timing. */

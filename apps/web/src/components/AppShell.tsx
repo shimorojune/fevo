@@ -9,6 +9,9 @@ const NAV = [
   { to: "/models", label: "Models" },
   { to: "/run", label: "Run" },
   { to: "/history", label: "History" },
+  { to: "/compare", label: "Compare" },
+  { to: "/benchmarks", label: "Benchmarks" },
+  { to: "/batches", label: "Batches" },
 ];
 
 export function Mark() {
@@ -22,7 +25,7 @@ export function Mark() {
   );
 }
 
-/** The app bar: mark, the three phase 1 screens with a sliding underline, and the account menu. */
+/** The app bar: mark, the screens with a sliding underline, and the account menu. */
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useSession();
   const nav = useRef<HTMLElement>(null);
@@ -33,20 +36,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const on = nav.current?.querySelector<HTMLElement>("a.active");
     setLine(on ? { left: on.offsetLeft, width: on.offsetWidth } : null);
+    // On a phone the links scroll sideways; keep the current one in view.
+    on?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [pathname]);
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] px-4 max-[980px]:block max-[980px]:h-auto">
-      <header className="flex h-[52px] items-center gap-7 border-b border-border">
+      <header className="flex h-[52px] items-center gap-7 border-b border-border max-[980px]:gap-4">
         <NavLink to="/models" aria-label="fevo, models">
           <Mark />
         </NavLink>
-        <nav ref={nav} aria-label="Primary" className="relative flex flex-1 gap-[22px] text-muted-foreground">
+        <nav ref={nav} aria-label="Primary" className="relative flex min-w-0 flex-1 gap-[22px] pb-px overflow-x-auto whitespace-nowrap text-muted-foreground [scrollbar-width:none] max-[980px]:gap-4">
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} className={({ isActive }) => `py-1 transition-colors hover:text-foreground ${isActive ? "active text-foreground" : ""}`}>
               {n.label}
             </NavLink>
           ))}
-          {line && <span aria-hidden className="absolute bottom-[-1px] h-0.5 bg-foreground transition-[left,width] duration-[260ms] ease-[cubic-bezier(.2,.8,.2,1)]" style={{ left: line.left, width: line.width }} />}
+          {line && <span aria-hidden className="absolute bottom-0 h-0.5 bg-foreground transition-[left,width] duration-[260ms] ease-[cubic-bezier(.2,.8,.2,1)]" style={{ left: line.left, width: line.width }} />}
         </nav>
         <DropdownMenu>
           <DropdownMenuTrigger
