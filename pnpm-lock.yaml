@@ -226,6 +226,28 @@ importers:
         specifier: workspace:*
         version: link:../../packages/tracks
 
+  tools/publish:
+    dependencies:
+      '@fevo/agent-format':
+        specifier: workspace:*
+        version: link:../../packages/agent-format
+      '@fevo/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      '@fevo/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
+      '@fevo/tracks':
+        specifier: workspace:*
+        version: link:../../packages/tracks
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.19.2
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   tools/replay:
     dependencies:
       '@fevo/agent-format':

@@ -7,7 +7,8 @@
     "dev": "node --watch src/main.ts",
     "start": "node src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --test \"test/**/*.test.ts\"",
+    "hash-password": "node src/hash-password.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3",
