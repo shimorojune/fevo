@@ -2,7 +2,7 @@
 
 Train neural networks (NEAT genome or MLP, as JSON) to drive real-scale circuits on one deterministic simulator, and follow them on a private dashboard. Training publishes models and progress to the API; the dashboard lists every model and track, runs any model on any track in your browser, and shows training live.
 
-Design: [docs/design/evracer.html](docs/design/evracer.html). Decisions: [docs/decisions.md](docs/decisions.md).
+Decisions: [docs/decisions.md](docs/decisions.md).
 
 ## Layout
 
