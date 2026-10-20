@@ -6,14 +6,15 @@
     <title>fevo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
     <script>
-      // Apply the saved theme before first paint. Dark is the default.
-      try {
-        document.documentElement.dataset.theme = localStorage.getItem("fevo.theme") === "light" ? "light" : "dark";
-      } catch {
-        document.documentElement.dataset.theme = "dark";
-      }
+      // Apply the saved theme before first paint; without one, follow the system.
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem("fevo.theme"); } catch (e) {}
+        if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+      })();
     </script>
   </head>
   <body>

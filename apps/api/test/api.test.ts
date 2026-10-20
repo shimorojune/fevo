@@ -149,3 +149,28 @@ test("bad input is rejected with a reason", async () => {
   assert.equal((await signedIn("GET", "/api/models/nope")).status, 404);
   assert.equal((await signedIn("GET", "/api/runs/nope")).status, 404);
 });
+
+test("drives: a lap run from the dashboard is saved, verified when it matches, and listed newest first", async () => {
+  const { models } = (await (await signedIn("GET", "/api/models")).json()) as { models: { id: string; name: string }[] };
+  const house = models.find((m) => m.name === "House")!;
+  const lap = publishedLaps(example("genome"), "spielberg")[1]!;
+  const base = { modelId: house.id, trackId: "spielberg", seed: 1, noiseSeed: 0, gatesPassed: 107 };
+  assert.equal((await withKey("POST", "/api/drives", { ...base, errorLevel: 0, status: lap.status, steps: lap.steps, hash: lap.hash })).status, 401, "the publish key can't save drives");
+  const clean = await signedIn("POST", "/api/drives", { ...base, errorLevel: 0, status: lap.status, steps: lap.steps, hash: lap.hash, sectorEnds: [300.5, 640.25] });
+  assert.equal(clean.status, 201, await clean.clone().text());
+  const c1 = (await clean.json()) as { id: number; verified: boolean; lapTime: string | null; createdBy: string; sectorEnds: number[] };
+  assert.deepEqual(c1.sectorEnds, [300.5, 640.25]);
+  assert.equal(c1.verified, true);
+  assert.equal(c1.createdBy, "rohit");
+  assert.ok(c1.lapTime);
+  const noisy = (await (await signedIn("POST", "/api/drives", { ...base, errorLevel: 0.06, noiseSeed: 3, status: "crashed", steps: 900, gatesPassed: 40, hash: "beef" })).json()) as { id: number; verified: boolean; lapTime: string | null };
+  assert.equal(noisy.verified, false);
+  assert.equal(noisy.lapTime, null);
+  const { drives } = (await (await signedIn("GET", "/api/drives?track=spielberg")).json()) as { drives: { id: number }[] };
+  assert.deepEqual(drives.slice(0, 2).map((d) => d.id), [noisy.id, c1.id]);
+  const crashed = (await (await signedIn("GET", "/api/drives?status=crashed")).json()) as { drives: { status: string }[] };
+  assert.ok(crashed.drives.length >= 1 && crashed.drives.every((d) => d.status === "crashed"));
+  assert.equal((await signedIn("GET", `/api/drives/${c1.id}`)).status, 200);
+  assert.equal((await signedIn("POST", "/api/drives", { ...base, modelId: "nope", errorLevel: 0, status: "finished", steps: 1, hash: "a" })).status, 404);
+  assert.equal((await signedIn("POST", "/api/drives", { ...base, errorLevel: 2, status: "finished", steps: 1, hash: "a" })).status, 400);
+});

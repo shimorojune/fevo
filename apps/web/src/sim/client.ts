@@ -1,10 +1,9 @@
-import type { Request, Response } from "./protocol";
-
-type Listener = (m: Response) => void;
+import type { LapResult } from "@fevo/sim";
+import type { DriveRequest, Response } from "./protocol";
 
 let worker: Worker | null = null;
 let nextId = 1;
-const listeners = new Map<number, Listener>();
+const listeners = new Map<number, (m: Response) => void>();
 
 function get(): Worker {
   if (!worker) {
@@ -14,14 +13,19 @@ function get(): Worker {
   return worker;
 }
 
-/** Check an agent and run its three official laps; messages stream to onMessage. Returns a cancel function. */
-export function runAgent(trackId: string, agentText: string, onMessage: Listener): () => void {
+/** Drive one lap (and the ghost's) in the worker. Resolves with both traced laps. */
+export function driveLap(req: Omit<DriveRequest, "id" | "type">): Promise<{ model: LapResult; ghost?: LapResult }> {
   const id = nextId++;
-  listeners.set(id, (m) => {
-    onMessage(m);
-    if (m.type === "done" || m.type === "failed" || (m.type === "checked" && !m.ok)) listeners.delete(id);
+  return new Promise((resolve, reject) => {
+    const out: { model?: LapResult; ghost?: LapResult } = {};
+    listeners.set(id, (m) => {
+      if (m.type === "lap") out[m.who] = m.lap;
+      else {
+        listeners.delete(id);
+        if (m.type === "failed") reject(new Error(m.message));
+        else resolve(out as { model: LapResult; ghost?: LapResult });
+      }
+    });
+    get().postMessage({ ...req, id, type: "drive" } satisfies DriveRequest);
   });
-  const req: Request = { id, type: "run", trackId, agentText };
-  get().postMessage(req);
-  return () => listeners.delete(id);
 }

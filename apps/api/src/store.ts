@@ -8,14 +8,37 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { fingerprint, parameterCount, parseAgent, type AgentError } from "@fevo/agent-format";
 import type { TrackFile } from "@fevo/tracks";
-import { laps, models, tracks, trainingMetrics, trainingRuns, type Db, type Lap, type Model, type ModelStatus, type RunStatus, type Track, type TrainingRun } from "./db.ts";
+import { drives, laps, models, tracks, trainingMetrics, trainingRuns, type Db, type Drive, type Lap, type Model, type ModelStatus, type RunStatus, type Track, type TrainingRun } from "./db.ts";
 import type { Verifier } from "./pool.ts";
 import { agentShape, RULES_BY_ID, SIM_WASM_SHA256 } from "./rules.ts";
 
 export type StoreEvent =
   | { type: "model"; model: ModelSummary }
   | { type: "run"; run: TrainingRun }
-  | { type: "metrics"; runId: string; metrics: { step: number; values: Record<string, number> }[] };
+  | { type: "metrics"; runId: string; metrics: { step: number; values: Record<string, number> }[] }
+  | { type: "drive"; drive: Drive };
+
+export interface NewDrive {
+  modelId: string;
+  trackId: string;
+  seed: number;
+  errorLevel: number;
+  noiseSeed: number;
+  ghostModelId?: string | undefined;
+  status: string;
+  steps: number;
+  gatesPassed: number;
+  hash: string;
+  sectorEnds?: number[] | undefined;
+  createdBy: string;
+}
+
+export interface DriveFilter {
+  modelId?: string | undefined;
+  trackId?: string | undefined;
+  status?: string | undefined;
+  limit?: number | undefined;
+}
 
 export interface PostedLap {
   trackId: string;
@@ -211,6 +234,48 @@ export class Store {
   }
 
   // Training runs
+
+  // Drives: laps run from the dashboard
+
+  async addDrive(d: NewDrive): Promise<{ ok: true; drive: Drive } | { ok: false; error: string }> {
+    const [model] = await this.#db.select({ id: models.id, rulesId: models.rulesId }).from(models).where(eq(models.id, d.modelId));
+    if (!model) return { ok: false, error: "No such model." };
+    const [track] = await this.#db.select({ id: tracks.id }).from(tracks).where(eq(tracks.id, d.trackId));
+    if (!track) return { ok: false, error: "No such track." };
+    if (d.ghostModelId) {
+      const [ghost] = await this.#db.select({ id: models.id }).from(models).where(eq(models.id, d.ghostModelId));
+      if (!ghost) return { ok: false, error: "No such ghost model." };
+    }
+    // A clean lap is verified when it matches the lap the server re-ran for this model, track and seed.
+    let verified = false;
+    if (d.errorLevel === 0) {
+      const [known] = await this.#db
+        .select({ hash: laps.hash, steps: laps.steps })
+        .from(laps)
+        .where(and(eq(laps.modelId, d.modelId), eq(laps.trackId, d.trackId), eq(laps.seed, d.seed), eq(laps.errorLevel, 0)));
+      verified = !!known && known.hash === d.hash && known.steps === d.steps;
+    }
+    const [drive] = await this.#db
+      .insert(drives)
+      .values({ ...d, ghostModelId: d.ghostModelId ?? null, sectorEnds: d.sectorEnds ?? null, rulesId: model.rulesId, simSha256: SIM_WASM_SHA256, verified })
+      .returning();
+    this.events.emit("event", { type: "drive", drive: drive! });
+    return { ok: true, drive: drive! };
+  }
+
+  async listDrives(f: DriveFilter = {}): Promise<Drive[]> {
+    const where = and(
+      f.modelId ? eq(drives.modelId, f.modelId) : undefined,
+      f.trackId ? eq(drives.trackId, f.trackId) : undefined,
+      f.status ? eq(drives.status, f.status) : undefined,
+    );
+    return this.#db.select().from(drives).where(where).orderBy(desc(drives.createdAt), desc(drives.id)).limit(Math.min(f.limit ?? 500, 2000));
+  }
+
+  async getDrive(id: number): Promise<Drive | undefined> {
+    const [row] = await this.#db.select().from(drives).where(eq(drives.id, id));
+    return row;
+  }
 
   async createRun(r: { name: string; method: string; machine?: string | undefined; config?: Record<string, unknown> | undefined; notes?: string | undefined }): Promise<TrainingRun> {
     const [run] = await this.#db

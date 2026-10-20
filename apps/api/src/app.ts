@@ -187,10 +187,54 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
     return ok ? c.json({ ok: true, count: list.length }) : c.json({ error: "No such run." }, 404);
   });
 
+  // Drives: laps run from the dashboard's Run screen, listed in History.
+
+  app.get("/api/drives", auth.requireUser, async (c) => {
+    const q = c.req.query();
+    const limit = q.limit ? Number(q.limit) : undefined;
+    if (limit !== undefined && !(Number.isInteger(limit) && limit > 0)) return bad(c, "limit must be a positive whole number.");
+    return c.json({ drives: (await store.listDrives({ modelId: q.model, trackId: q.track, status: q.status, limit })).map(withDriveTime) });
+  });
+  app.get("/api/drives/:id", auth.requireUser, async (c) => {
+    const id = Number(c.req.param("id"));
+    const d = Number.isInteger(id) ? await store.getDrive(id) : undefined;
+    return d ? c.json(withDriveTime(d)) : c.json({ error: "No such run." }, 404);
+  });
+  app.post("/api/drives", auth.requireUser, async (c) => {
+    const body = await json(c);
+    if (!body) return bad(c, "Send a JSON body.");
+    const { modelId, trackId, seed, errorLevel, noiseSeed, ghostModelId, status, steps, gatesPassed, hash, sectorEnds } = body;
+    if (typeof modelId !== "string" || typeof trackId !== "string") return bad(c, "modelId and trackId are required.");
+    if (!Number.isInteger(seed) || (seed as number) < 0) return bad(c, "seed must be a whole number from 0.");
+    if (typeof errorLevel !== "number" || !(errorLevel >= 0 && errorLevel <= 1)) return bad(c, "errorLevel must be between 0 and 1.");
+    if (!Number.isInteger(noiseSeed) || (noiseSeed as number) < 0 || (noiseSeed as number) >= 2 ** 31) return bad(c, "noiseSeed must be a whole number from 0 to 2^31 - 1.");
+    if (ghostModelId !== undefined && ghostModelId !== null && typeof ghostModelId !== "string") return bad(c, "ghostModelId must be a model id.");
+    if (typeof status !== "string" || !["finished", "crashed", "stopped", "timed-out", "error"].includes(status)) return bad(c, "status must be a lap result.");
+    if (!Number.isInteger(steps) || (steps as number) < 0 || !Number.isInteger(gatesPassed) || (gatesPassed as number) < 0) return bad(c, "steps and gatesPassed must be whole numbers.");
+    if (typeof hash !== "string" || !/^[0-9a-f]{1,64}$/.test(hash)) return bad(c, "hash must be the lap's state hash.");
+    if (sectorEnds !== undefined && !(Array.isArray(sectorEnds) && sectorEnds.length <= 64 && sectorEnds.every((x) => typeof x === "number" && x >= 0))) return bad(c, "sectorEnds must be a list of step numbers.");
+    const r = await store.addDrive({
+      modelId,
+      trackId,
+      seed: seed as number,
+      errorLevel,
+      noiseSeed: noiseSeed as number,
+      ghostModelId: (ghostModelId as string | null | undefined) ?? undefined,
+      status,
+      steps: steps as number,
+      gatesPassed: gatesPassed as number,
+      hash,
+      sectorEnds: sectorEnds as number[] | undefined,
+      createdBy: auth.user(c) ?? "unknown",
+    });
+    return r.ok ? c.json(withDriveTime(r.drive), 201) : c.json({ error: r.error }, 404);
+  });
+
   // Live updates for the dashboard.
   app.get("/api/events", auth.requireUser, (c) =>
     streamSSE(c, async (stream) => {
-      const send = (e: StoreEvent) => void stream.writeSSE({ event: e.type, data: JSON.stringify(e.type === "model" ? { ...e, model: withTimes(e.model) } : e) });
+      const payload = (e: StoreEvent) => (e.type === "model" ? { ...e, model: withTimes(e.model) } : e.type === "drive" ? { ...e, drive: withDriveTime(e.drive) } : e);
+      const send = (e: StoreEvent) => void stream.writeSSE({ event: e.type, data: JSON.stringify(payload(e)) });
       store.events.on("event", send);
       const ping = setInterval(() => void stream.writeSSE({ event: "ping", data: "" }), 25_000);
       await new Promise<void>((resolve) => stream.onAbort(resolve));
@@ -209,6 +253,12 @@ export function createApp(store: Store, auth: Auth, opts: AppOptions = {}) {
   }
 
   return app;
+}
+
+/** Adds the lap time, at the drive's rules timing. */
+function withDriveTime<D extends { rulesId: string; status: string; steps: number }>(d: D) {
+  const hz = RULES_BY_ID.get(d.rulesId)?.timing.agentHz ?? DEFAULT_RULES.timing.agentHz;
+  return { ...d, lapTime: d.status === "finished" ? formatLapTime(d.steps, hz) : null };
 }
 
 /** Adds lap times per track so the dashboard needn't know each model's rules timing. */

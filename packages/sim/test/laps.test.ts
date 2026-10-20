@@ -92,3 +92,20 @@ test("solo-2 drives the same agents differently, and configuring solo-1 afterwar
     one.laps.map((l) => l.hash),
   );
 });
+
+test("driver error: level 0 is the clean lap, a seed replays exactly, more error changes the lap", () => {
+  const t = track("spielberg");
+  const program = example("mlp");
+  configure(R, program.setup);
+  loadTrack(t);
+  loadAgent(program);
+  const clean = runLap(R, 1);
+  assert.equal(runLap(R, 1, { error: { level: 0, noiseSeed: 7 } }).hash, clean.hash);
+  const a = runLap(R, 1, { error: { level: 0.03, noiseSeed: 7 } });
+  const b = runLap(R, 1, { error: { level: 0.03, noiseSeed: 7 }, trace: true });
+  assert.equal(a.hash, b.hash, "the same noise seed gives the same lap, traced or not");
+  assert.equal(b.trace!.x.length, b.steps + 1);
+  assert.notEqual(a.hash, clean.hash, "3% error changes the lap");
+  assert.notEqual(runLap(R, 1, { error: { level: 0.03, noiseSeed: 8 } }).hash, a.hash, "another noise seed, another lap");
+  for (const s of b.trace!.steer) assert.ok(s >= -1 && s <= 1, "applied steering stays in range");
+});
